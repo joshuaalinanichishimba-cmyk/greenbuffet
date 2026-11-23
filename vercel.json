@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite",
+      "buildCommand": "VITE_DEMO_ENABLED=true VITE_API_BASE_URL=/api/v1 VITE_KITCHEN_POLLING_ONLY=true npm run build",
+      "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+    },
+    "backend": {
+      "root": "backend",
+      "framework": "fastapi",
+      "entrypoint": "hosted_demo:app"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/v1/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ]
+}

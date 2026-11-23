@@ -38,3 +38,17 @@ The menu prices come from the Stage 11 seed. The logo and illustrative photos co
 The database uses the existing Stage 11 bootstrap, which creates the demo checkout table. Do not extract this package over a Stage 12 installation. Before public hosting, verify the deployment configuration and confirm menu prices and photo rights.
 
 For regression or load testing, install `requests` in the demo virtual environment and set `GREENBUFFET_TEST_API_URL` and `GREENBUFFET_TEST_PASSWORD` for a disposable database. Run the load script directly when needed. It writes sample sales.
+
+## Hosted preview on Vercel
+
+Use the repository root with Vercel Services. `vercel.json` builds Vue and FastAPI together, serves the storefront at `/demo`, and routes `/api/v1` on the same origin. The hosted kitchen refreshes every five seconds. File uploads and local backup creation are available in the Windows POS. Use the hosted Postgres provider for hosted backups.
+
+For the preview environment, connect a fresh Neon Postgres database with a name ending in `_demo`. Set `DATABASE_URL` to that database's SSL-enabled connection string, `DEMO_ENABLED` to `true`, `ENVIRONMENT` to `production`, and `JWT_SECRET` to an independently generated random secret of at least 32 characters. Store the connection string and signing key as Vercel secrets. Seed the database once from `backend` using the same private connection string:
+
+```powershell
+$env:DEMO_ENABLED = 'true'
+.\.venv\Scripts\python.exe -m app.seed
+.\.venv\Scripts\python.exe -m app.seed_menu
+```
+
+Set `DEMO_ENABLED=true` in the shell before seeding to check that the database name ends in `_demo`. The seed prints the demo owner's temporary sign-in in the terminal where it runs. Verify menu, checkout, and kitchen tracking on the preview URL before updating the GitHub Pages link.

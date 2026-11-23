@@ -77,6 +77,7 @@ let clock: number | undefined
 let lastPoll = 0
 
 function connect() {
+  if (import.meta.env.VITE_KITCHEN_POLLING_ONLY === 'true') return
   const token = getToken()
   if (!token) return
   const base = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1')

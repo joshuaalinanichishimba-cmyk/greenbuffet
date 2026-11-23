@@ -4,7 +4,7 @@ Always run backend commands from the backend/ folder so this file is found.
 """
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from sqlalchemy.engine import make_url
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     APP_TIMEZONE: str = "Africa/Lusaka"
     BUSINESS_NAME: str = "The Green Buffet"
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def use_psycopg(cls, value: str) -> str:
+        url = make_url(value)
+        if url.drivername in {"postgres", "postgresql"}:
+            return url.set(drivername="postgresql+psycopg").render_as_string(hide_password=False)
+        return value
+
     @model_validator(mode="after")
     def validate_demo_database(self):
         if self.DEMO_ENABLED:
@@ -30,6 +38,10 @@ class Settings(BaseSettings):
             if url.get_backend_name() != "postgresql" or not (url.database or "").endswith("_demo"):
                 raise ValueError("DEMO_ENABLED requires a separate PostgreSQL database ending in _demo.")
         return self
+
+    @property
+    def hosted_demo(self) -> bool:
+        return self.DEMO_ENABLED and self.ENVIRONMENT == "production"
 
     @property
     def cors_list(self) -> list[str]:

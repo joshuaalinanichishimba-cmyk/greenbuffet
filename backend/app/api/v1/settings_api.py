@@ -195,6 +195,8 @@ async def upload(
     db: Session = Depends(get_db),
     user: User = Depends(requires("settings.edit", "menu.edit", "hr.manage", "purchases.manage")),
 ):
+    if config.hosted_demo:
+        raise HTTPException(501, "File uploads are available in the local POS.")
     if kind not in KINDS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Kind must be one of: {', '.join(KINDS)}")
     if attached_to not in ATTACH_TO:
@@ -323,6 +325,8 @@ def backups(_: User = Depends(can_edit)):
 @router.post("/backups", response_model=BackupOut, status_code=status.HTTP_201_CREATED)
 def make_backup(db: Session = Depends(get_db), user: User = Depends(can_edit)):
     """Runs pg_dump into the backups folder, the same file the scripts make."""
+    if config.hosted_demo:
+        raise HTTPException(501, "Use the hosted database provider to manage backups.")
     url = config.DATABASE_URL
     try:
         rest = url.split("://", 1)[1]
