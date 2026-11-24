@@ -1,0 +1,50 @@
+THE GREEN BUFFET - MANAGEMENT SYSTEM
+Stage 1: foundation
+====================================
+
+These files belong in:  D:\The Green Buffet
+
+SETTING UP (first time only)
+----------------------------
+1. Open PowerShell.
+2. Run these three lines, one at a time:
+
+      cd "D:\The Green Buffet"
+      .\scripts\check.ps1
+      .\scripts\setup.ps1
+
+   check.ps1 tells you what is missing. If it lists anything, install it with
+   the winget line it prints, then CLOSE PowerShell and open a new window
+   before running setup.ps1.
+
+   setup.ps1 asks for two passwords:
+     - one you choose for the database user gb_dev
+     - the PostgreSQL superuser password you set when installing PostgreSQL
+
+   It prints the owner sign-in details at the end. Write them down.
+
+EVERY DAY AFTER THAT
+--------------------
+      cd "D:\The Green Buffet"
+      .\scripts\run.ps1
+
+   Two windows open and the browser goes to http://localhost:5173
+   Sign in with the owner email. You will be asked to set your own password.
+
+   To stop: close the two PowerShell windows.
+
+BACKING UP
+----------
+      .\scripts\backup.ps1      writes a dump into backups\
+      .\scripts\restore.ps1     proves the newest dump actually restores
+
+   Do this before anything important. Keep a copy off this laptop.
+
+IF SOMETHING GOES WRONG
+-----------------------
+  "not recognized"            open a new PowerShell window
+  "cannot be loaded"          Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+  database connection refused check PostgreSQL is running in Services
+  anything else               see README.md, Troubleshooting
+
+More detail is in README.md and documentation\.

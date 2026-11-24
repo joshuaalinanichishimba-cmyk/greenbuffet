@@ -1,0 +1,51 @@
+/**
+ * Line icons for the staff screens.
+ *
+ * The first set is copied from the demo's sidebar so the two look identical.
+ * The rest are drawn on the same 24px grid with the same stroke, for screens
+ * the demo does not have (the till, the books, payroll and so on).
+ */
+export const ICONS: Record<string, string> = {
+  shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"></path><path d="M9 12l2 2 4-4"></path>',
+  database: '<ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"></path><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"></path>',
+  sun: '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path>',
+  monitor: '<rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path>',
+  alert: '<path d="M12 3 2 20h20z"></path><path d="M12 9v5M12 17h.01"></path>',
+  arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
+  book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path><path d="M4 21a2 2 0 0 1 2-2h13"></path><path d="M9 7h6"></path>',
+  bowl: '<path d="M3 11h18a9 9 0 0 1-18 0z"></path><path d="M8 7c0-1.5 1-2 1-3M12 7c0-1.5 1-2 1-3M16 7c0-1.5 1-2 1-3"></path>',
+  box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"></path>',
+  burger: '<path d="M4 6h16M4 12h16M4 18h16"></path>',
+  calendarCheck: '<path d="M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M9 15l2 2 4-4"></path>',
+  card: '<path d="M3 6h18v12H3zM3 10h18M7 15h3"></path>',
+  cash: '<rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle><path d="M6 12h.01M18 12h.01"></path>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>',
+  clock: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
+  close: '<path d="M6 6l12 12M18 6 6 18"></path>',
+  customers: '<circle cx="12" cy="8" r="4"></circle><path d="M5 21a7 7 0 0 1 14 0"></path>',
+  down: '<path d="m6 9 6 6 6-6"></path>',
+  external: '<path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path>',
+  flame: '<path d="M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z"></path>',
+  home: '<path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path>',
+  journal: '<path d="M6 3h9l4 4v14H6z"></path><path d="M14 3v5h5"></path><path d="M9 13h7M9 17h5"></path>',
+  logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"></path><path d="M10 17l-5-5 5-5"></path><path d="M5 12h11"></path>',
+  map: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"></path><path d="M9 4v14M15 6v14"></path>',
+  menu: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M8 7h7M8 11h5"></path>',
+  message: '<path d="M4 5h16v11H9l-5 4z"></path>',
+  minus: '<path d="M5 12h14"></path>',
+  package: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"></path><path d="M3 8l9 5 9-5M12 13v8"></path>',
+  party: '<path d="M3 21 9 6l9 9-15 6z"></path><path d="M14 3c1 1 1 2.5 0 3.5M18 7c1-1 2.5-1 3.5 0M17 3l.5.5M20.5 10.5l.5.5"></path>',
+  plus: '<path d="M12 5v14M5 12h14"></path>',
+  print: '<path d="M6 9V3h12v6"></path><rect x="3" y="9" width="18" height="8" rx="2"></rect><path d="M6 14h12v7H6z"></path>',
+  receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3"></path>',
+  search: '<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>',
+  sliders: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4"></path>',
+  star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"></path>',
+  tag: '<path d="M3 12V4h8l10 10-8 8zM7.5 8.5h.01"></path>',
+  till: '<rect x="3" y="10" width="18" height="11" rx="2"></rect><path d="M7 10V6a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v4"></path><path d="M9 3h6"></path><path d="M7 15h.01M11 15h.01M15 15h2"></path>',
+  truck: '<path d="M3 6h11v10H3z"></path><path d="M14 9h4l3 3v4h-7"></path><circle cx="7" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle>',
+  up: '<path d="m6 15 6-6 6 6"></path>',
+  users: '<path d="M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"></path>',
+  wallet: '<rect x="3" y="6" width="18" height="14" rx="2"></rect><path d="M3 10h18"></path><path d="M16 15h2"></path><path d="M6 6l9-3 1 3"></path>',
+}

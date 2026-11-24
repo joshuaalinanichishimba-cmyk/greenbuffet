@@ -1,0 +1,20 @@
+# HTTPS with a certificate Caddy gets and renews by itself.
+{$DOMAIN} {
+	encode gzip
+	tls {$EMAIL}
+
+	# Uploaded photographs and reports can be large; the default is too small.
+	request_body {
+		max_size 12MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	reverse_proxy app:8000
+}
