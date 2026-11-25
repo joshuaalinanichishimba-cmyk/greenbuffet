@@ -45,7 +45,7 @@ if (-not $listeners.Count) {
 # ---- 2. does it answer as us ---------------------------------------------------
 Head 'Answering'
 try {
-    $health = Invoke-RestMethod "http://localhost:$Port/api/v1/health" -TimeoutSec 4
+    $health = Invoke-RestMethod "http://127.0.0.1:$Port/api/v1/health" -TimeoutSec 4
     Line ("Yes: {0}, database {1}" -f $health.business, $health.database) Green
     try {
         $null = Invoke-WebRequest "http://localhost:$Port/api/v1/dashboard/service" -UseBasicParsing -TimeoutSec 4
