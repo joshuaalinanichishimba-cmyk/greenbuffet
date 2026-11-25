@@ -150,3 +150,29 @@ def drop_retired(engine: Engine) -> list[str]:
                 if result.rowcount:
                     dropped.append(f"permission {code}")
     return dropped
+
+
+AUDIT_GUARD = """
+CREATE OR REPLACE FUNCTION audit_log_is_append_only() RETURNS trigger AS $$
+BEGIN
+    RAISE EXCEPTION 'The audit log cannot be changed or deleted';
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS audit_log_append_only ON audit_log;
+CREATE TRIGGER audit_log_append_only BEFORE UPDATE OR DELETE ON audit_log
+    FOR EACH ROW EXECUTE FUNCTION audit_log_is_append_only();
+"""
+
+
+def protect_audit_log(engine: Engine) -> None:
+    """Makes the audit log append-only inside PostgreSQL itself.
+
+    The application never edits or deletes an audit row; this makes sure no
+    one else can either, through the application or a stray script. Someone
+    with full database rights could still drop the trigger, which is why
+    backups are kept off the machine too.
+    """
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.begin() as conn:
+        conn.exec_driver_sql(AUDIT_GUARD)

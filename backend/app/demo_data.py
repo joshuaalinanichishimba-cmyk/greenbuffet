@@ -50,12 +50,13 @@ PEOPLE = [
     ("cashier", "bupe@greenbuffet.zm", "Bupe Lungu", "Cashier", "Counter", 4200),
     ("kitchen", "kitchen@greenbuffet.zm", "Kelvin Sakala", "Head cook", "Kitchen", 5600),
     ("kitchen", "ruth@greenbuffet.zm", "Ruth Mbewe", "Cook", "Kitchen", 4500),
+    ("it", "it@greenbuffet.zm", "Daniel Chileshe", "IT support", "Technical", 6000),
 ]
 CUSTOMERS = ["Thandiwe", "Mapalo", "Chilufya", "Kondwani", "Natasha", "Bwalya", "Musonda", "Lubono", "Mulenga",
              "Chipo", "Wezi", "Kabwe", "Precious", "Mwape", "Joseph", "Esther", "Daniel", "Ruth", "Peter", ""]
 # Moved back in time with each sale: everything a sale writes.
 SALE_TABLES = ("orders", "order_lines", "order_line_options", "payments", "kitchen_items", "journal_entries",
-               "journal_lines", "stock_moves", "audit_log", "points_entries", "cash_movements")
+               "journal_lines", "stock_moves", "points_entries", "cash_movements")
 DAYS_BACK = 7
 
 

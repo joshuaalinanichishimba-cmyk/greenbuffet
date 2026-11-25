@@ -6,6 +6,12 @@
  */
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
 
+/** The last error the server sent back, for the "Report a problem" form. */
+export const lastError = { reference: '', message: '', at: 0 }
+
+/** Shown on reports and in the IT workspace; raised with each release. */
+export const APP_VERSION = '1.24.0'
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message)
@@ -75,6 +81,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     } catch {
       /* non-JSON error */
     }
+    // Kept so a problem report can carry the reference without anyone copying it.
+    const ref = /reference ([0-9a-f]{6})/.exec(detail)
+    if (ref) lastError.reference = ref[1]
+    lastError.message = detail
+    lastError.at = Date.now()
     throw new ApiError(response.status, detail)
   }
   if (response.status === 204) return undefined as T

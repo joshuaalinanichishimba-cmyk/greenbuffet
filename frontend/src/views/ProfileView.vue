@@ -35,11 +35,12 @@ const base = computed(() => (isMe.value ? '/profile' : `/team/${userId.value}`))
 const TAB_LABELS: Record<string, string> = {
   overview: 'Overview', activity: 'Activity', attendance: 'Attendance & shifts', permissions: 'Roles & permissions',
   logins: 'Sign-in history', sessions: 'Devices', employment: 'Employment', payroll: 'Pay & documents',
-  security: 'Security', notifications: 'Notifications',
+  security: 'Security', notifications: 'Notifications', support: 'Problem reports',
 }
 const tabs = computed(() => {
   const list = [...(profile.value?.tabs ?? ['overview'])]
   if (isMe.value) list.push('notifications')
+  if (isMe.value && session.can('tickets.report')) list.push('support')
   return list
 })
 const tab = computed(() => {
@@ -166,6 +167,7 @@ async function loadTab() {
     if (t === 'employment') data.value.employment = await api.get(`/team/${id}/employment`)
     if (t === 'payroll') data.value.payroll = await api.get(`/team/${id}/payroll`)
     if (t === 'notifications') data.value.notices = await api.get<Notice[]>('/notifications?limit=100')
+    if (t === 'support') data.value.tickets = await api.get('/tickets/mine')
   } catch (e) {
     fail(e, 'Could not load this tab.')
   }
@@ -691,6 +693,23 @@ const variance = (v: number | null) => (v === null ? 'Open' : v === 0 ? 'Exact' 
         </div>
       </section>
 
+      <!-- ===== my problem reports ===== -->
+      <section v-if="tab === 'support' && isMe && data.tickets" class="card">
+        <div class="card-head"><h3>Problem reports</h3><span class="muted small">Send a new one from the menu under your picture</span></div>
+        <p v-if="!data.tickets.length" class="home-empty">You have not reported a problem.</p>
+        <ul class="home-list">
+          <li v-for="t in data.tickets" :key="t.id">
+            <div>
+              <b>{{ t.number }}</b> <span class="muted">· {{ clock(t.created_at) }}</span>
+              <p class="sub">{{ t.description }}</p>
+              <p v-for="(n, k) in t.notes" :key="k" class="sub reply"><b>{{ n.by }}:</b> {{ n.note }}</p>
+              <p v-if="t.resolution" class="sub reply"><b>Done:</b> {{ t.resolution }}</p>
+            </div>
+            <span class="pill" :class="t.status === 'resolved' || t.status === 'closed' ? '' : 'warn'">{{ t.status }}</span>
+          </li>
+        </ul>
+      </section>
+
       <!-- ===== notifications (my own) ===== -->
       <section v-if="tab === 'notifications' && isMe" class="split">
         <div class="card">
@@ -776,6 +795,7 @@ const variance = (v: number | null) => (v === null ? 'Open' : v === 0 ? 'Exact' 
 .switch-row input { width: 20px; height: 20px; accent-color: var(--green); }
 li.unread b { color: var(--green-deep); }
 .small-value { font-size: 1.3rem; }
+.reply { border-left: 3px solid var(--leaf); padding-left: .6rem; margin-top: .35rem; }
 .table-wrap { overflow-x: auto; }
 @media (max-width: 640px) {
   .setup { grid-template-columns: 1fr; }

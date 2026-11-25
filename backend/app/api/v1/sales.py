@@ -35,7 +35,8 @@ from app.services.loyalty import earn_on_order, free_item_for, give_back_on_canc
 from app.services.promotions import count_promo_use, promo_discount
 from app.services.ordering import OrderProblem, apply_totals, build_lines
 from app.services.posting import (
-    Unbalanced, post_cash_movement, post_cost_of_sales, post_failed_payment, post_refund, post_sale,
+    Unbalanced, post_cash_movement, post_cost_of_sales, post_debt_collected, post_failed_payment, post_refund,
+    post_sale,
     post_shift_variance,
 )
 
@@ -232,7 +233,10 @@ def close_shift(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the cashier who opened this till, or a manager, can close it.")
 
     unpaid = db.scalar(
-        select(func.count(Order.id)).where(Order.shift_id == shift.id, Order.status == "open")
+        # Orders handed over whose mobile money later failed are owed, not
+        # unfinished: the debt is in the books and does not hold the till.
+        select(func.count(Order.id)).where(Order.shift_id == shift.id, Order.status == "open",
+                                           Order.paid_at.is_(None))
     ) or 0
     if unpaid:
         raise HTTPException(
@@ -587,6 +591,14 @@ def take_payment(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "That is more than the order owes. Take the amount owing and give change from the drawer.",
         )
+    if body.method in ELECTRONIC:
+        from app.services.ops import control
+        if not control(db, "electronic_payments"):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Mobile money and card are switched off for now, so the till takes cash only. "
+                "Payments already taken can still be matched.",
+            )
     if body.method in ELECTRONIC and not body.reference.strip():
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -634,8 +646,23 @@ def take_payment(
     # totals have to be read again before deciding whether it is settled.
     db.refresh(found)
 
+    # An order paid once before (a mobile money payment then failed, so it
+    # went back to owing): this money settles the debt. The kitchen, stock,
+    # books and stamps were all done the first time and must not be repeated.
+    settled_before = found.paid_at is not None
+    if settled_before:
+        try:
+            post_debt_collected(db, found, payment, who=user.name)
+        except Unbalanced:
+            pass
+
     tell_kitchen = False
-    if found.outstanding_ngwee <= 0:
+    if found.outstanding_ngwee <= 0 and settled_before:
+        found.status = "paid"
+        record(db, user.name, "money", "Owed amount collected",
+               f"{found.number}: K{payment.amount_ngwee / 100:,.2f} by {METHOD_LABELS.get(payment.method, payment.method)}",
+               found.number)
+    elif found.outstanding_ngwee <= 0:
         found.status = "paid"
         found.paid_at = datetime.now(timezone.utc)
         # Paid means the kitchen can start: the board is written here rather
@@ -740,6 +767,14 @@ def cancel_order(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
     if found.status == "cancelled":
         raise HTTPException(status.HTTP_409_CONFLICT, "That order is already cancelled.")
+    if found.paid_at is not None:
+        # Handed over, then a payment failed: the food is gone and the money
+        # is owed. Cancelling would hide the debt.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"This order was handed over and still owes K{found.outstanding_ngwee / 100:,.2f}. Take the payment, "
+            "or the accountant can write the debt off in the books.",
+        )
     if found.paid_ngwee > found.refunded_ngwee:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -891,6 +926,12 @@ def confirm_payment(
             post_failed_payment(db, order, p, who=user.name)
         except Unbalanced:
             pass
+        # The food was handed over, but the money did not come: the order
+        # owes again, so it shows at the till under Waiting for payment.
+        db.flush()
+        db.refresh(order)
+        if order.outstanding_ngwee > 0:
+            order.status = "open"
     record(db, user.name, "money", "Payment confirmed" if body.ok else "Payment failed",
            f"{order.number if order else ''}: {METHOD_LABELS.get(p.method, p.method)} {p.reference}, "
            f"K{p.amount_ngwee / 100:,.2f}" + (f" ({body.note.strip()})" if body.note.strip() else ""),

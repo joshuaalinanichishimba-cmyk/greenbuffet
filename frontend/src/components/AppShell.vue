@@ -30,7 +30,7 @@ const can = (...codes: string[]) => session.canAny(...codes)
 // The first link is each account's own home, named for what it holds.
 const home = computed(() => homeFor(session.user.value?.role_id, session.permissions.value))
 const HOME_LABELS: Record<HomeKind, string> = {
-  overview: 'Overview', system: 'System', money: 'Money', cashier: 'My till', stock: 'Store room', kitchen: 'Overview',
+  overview: 'Overview', system: 'System', money: 'Money', cashier: 'My till', stock: 'Store room', kitchen: 'Overview', it: 'IT workspace',
 }
 
 interface Link { to: string; label: string; icon: string; show: boolean; also?: string[] }
@@ -80,6 +80,13 @@ const groups = computed(() =>
         { to: '/books/journal', label: 'Journal', icon: 'journal', show: can('books.view', 'reports.view') },
         { to: '/people', label: can('hr.view', 'hr.manage', 'attendance.manage') ? 'Staff clocking' : 'My clocking', icon: 'clock', show: can('hr.view', 'hr.manage', 'attendance.clock') },
         { to: '/payroll', label: 'Payroll', icon: 'wallet', show: can('payroll.view', 'payroll.manage') },
+      ],
+    },
+    {
+      // The technical side, kept apart from the business screens.
+      name: 'Technical',
+      links: [
+        { to: '/it', label: 'IT workspace', icon: 'device', show: can('it.view'), also: ['/it'] },
       ],
     },
   ]

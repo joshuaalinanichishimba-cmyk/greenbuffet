@@ -15,6 +15,7 @@ const HOMES = {
   cashier: defineAsyncComponent(() => import('./CashierHome.vue')),
   stock: defineAsyncComponent(() => import('./StockHome.vue')),
   kitchen: defineAsyncComponent(() => import('./KitchenView.vue')),
+  it: defineAsyncComponent(() => import('./ITView.vue')),
 }
 
 const view = computed(() => HOMES[homeFor(session.user.value?.role_id, session.permissions.value)])

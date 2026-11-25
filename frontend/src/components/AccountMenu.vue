@@ -11,6 +11,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Avatar from './Avatar.vue'
 import Icon from './Icon.vue'
+import ReportProblem from './ReportProblem.vue'
 import { api, type Notice } from '../services/api'
 import { ago, lockNow } from '../services/presence'
 import { session } from '../stores/session'
@@ -21,6 +22,7 @@ const router = useRouter()
 const open = ref<'' | 'me' | 'bell'>('')
 const notices = ref<Notice[]>([])
 const root = ref<HTMLElement | null>(null)
+const reporting = ref(false)
 
 const me = computed(() => session.user.value)
 const status = computed(() => (session.connected.value ? 'online' : 'lost'))
@@ -123,10 +125,12 @@ onBeforeUnmount(() => {
       <button role="menuitem" @click="go('/profile/security')"><Icon name="lock" :size="18" /> Security settings</button>
       <button role="menuitem" @click="go('/profile/notifications')"><Icon name="bell" :size="18" /> Notification preferences</button>
       <button role="menuitem" @click="go('/profile/activity')"><Icon name="chart" :size="18" /> My activity</button>
+      <button v-if="session.can('tickets.report')" role="menuitem" @click="open = ''; reporting = true"><Icon name="alert" :size="18" /> Report a problem</button>
       <hr />
       <button role="menuitem" @click="lock"><Icon name="lock" :size="18" /> Lock screen</button>
       <button role="menuitem" class="out" @click="signOut"><Icon name="logout" :size="18" /> Sign out</button>
     </div>
+    <ReportProblem v-if="reporting" @close="reporting = false" />
   </div>
 </template>
 

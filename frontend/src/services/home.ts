@@ -6,7 +6,7 @@
  * till and reports lands on the Overview, and "Store hand" with only stock
  * lands on the store-room home.
  */
-export type HomeKind = 'overview' | 'system' | 'money' | 'cashier' | 'kitchen' | 'stock'
+export type HomeKind = 'overview' | 'system' | 'money' | 'cashier' | 'kitchen' | 'stock' | 'it'
 
 // The five account types. The Administrator and Inventory staff roles were
 // retired (24 Nov 2026): the system panel now sits on the owner's Overview,
@@ -17,6 +17,7 @@ const BY_ROLE: Record<string, HomeKind> = {
   accountant: 'money',
   cashier: 'cashier',
   kitchen: 'kitchen',
+  it: 'it',
 }
 
 export function homeFor(roleId: string | undefined, permissions: string[]): HomeKind {

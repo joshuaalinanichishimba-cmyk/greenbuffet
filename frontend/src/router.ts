@@ -17,6 +17,7 @@ const router = createRouter({
     // the directory and other people's profiles check permissions on the server.
     { path: '/profile/:tab?', component: () => import('./views/ProfileView.vue') },
     { path: '/team', component: () => import('./views/TeamView.vue') },
+    { path: '/it/:section?/:id?', component: () => import('./views/ITView.vue'), meta: { permission: 'it.view' } },
     { path: '/team/:id/:tab?', component: () => import('./views/ProfileView.vue') },
     // The demo's Overview by name, for accounts whose home is something else.
     { path: '/overview', component: () => import('./views/DashboardView.vue') },

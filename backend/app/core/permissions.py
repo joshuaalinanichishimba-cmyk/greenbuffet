@@ -55,6 +55,10 @@ PERMISSION_CATALOGUE: list[tuple[str, str, str, int]] = [
     ("feedback.view", "Customer feedback", "Administration", 440),
     ("team.view", "Team directory: who is working and online", "Administration", 450),
     ("security.manage", "Others' sign-in history, devices, archiving and two-step reset", "Administration", 460),
+    ("tickets.report", "Report a technical problem", "Technical", 500),
+    ("it.view", "IT workspace: system health, diagnostics, errors, incidents, tickets", "Technical", 510),
+    ("it.repair", "Run controlled repairs and integrity fixes", "Technical", 520),
+    ("it.control", "Emergency controls: cash-only, stop orders, read-only mode", "Technical", 530),
 ]
 
 ALL_PERMISSIONS = [c for c, _, _, _ in PERMISSION_CATALOGUE]
@@ -88,7 +92,7 @@ DEFAULT_ROLES: dict[str, tuple[str, str, list[str]]] = {
         "Manager",
         "Day-to-day running, approvals at the till, stock, books and people; no payroll approval",
         OPS + ["books.view", "books.edit", "hr.view", "hr.manage", "payroll.view",
-               "attendance.clock", "attendance.manage", "leave.approve", "audit.view", "team.view"],
+               "attendance.clock", "attendance.manage", "leave.approve", "audit.view", "team.view", "tickets.report"],
     ),
     "accountant": (
         "Accountant",
@@ -97,19 +101,26 @@ DEFAULT_ROLES: dict[str, tuple[str, str, list[str]]] = {
          "payments.confirm", "cash.approve"]
         + FINANCE
         + ["payroll.view", "payroll.manage", "payroll.approve", "payroll.pay",
-           "hr.view", "attendance.clock", "audit.view"],
+           "hr.view", "attendance.clock", "audit.view", "tickets.report"],
     ),
     "cashier": (
         "Cashier",
         "Till, payments, small discounts, refund requests, cash drops, own attendance",
         ["pos.use", "orders.view", "orders.update", "attendance.clock",
-         "discounts.give", "refunds.request", "cash.move"],
+         "discounts.give", "refunds.request", "cash.move", "tickets.report"],
     ),
     "kitchen": (
         "Kitchen staff",
         "Kitchen display, sold-out switches, stock counts and waste",
         ["kitchen.view", "orders.view", "orders.update", "inventory.view", "inventory.adjust",
-         "service.control", "attendance.clock"],
+         "service.control", "attendance.clock", "tickets.report"],
+    ),
+    # Technical support. Deliberately no money, pay, prices or refunds: the IT
+    # person keeps the system running, they do not run the business.
+    "it": (
+        "IT administrator",
+        "System health, diagnostics, controlled repairs, incidents and support tickets; no business money or pay",
+        ["it.view", "it.repair", "it.control", "tickets.report", "attendance.clock"],
     ),
 }
 
@@ -163,9 +174,19 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
 def requires(*codes: str):
     """Guard a route: requires('payroll.approve'). Any one of the codes is enough."""
 
-    def guard(user: User = Depends(current_user)) -> User:
+    def guard(request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)) -> User:
         allowed = set(user.role.permission_codes)
         if not any(c in allowed for c in codes):
+            # A refusal is usually a wrong click. It is kept so a pattern can
+            # be seen (someone trying screen after screen), not as an accusation.
+            try:
+                from app.services.ops import security_event
+                security_event(db, "access_refused", "low", f"Needed {' or '.join(codes)}",
+                               account=user.email, ip=request.client.host if request.client else "",
+                               path=request.url.path)
+                db.commit()
+            except Exception:
+                db.rollback()
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 f"{user.role.label} accounts cannot do this.",

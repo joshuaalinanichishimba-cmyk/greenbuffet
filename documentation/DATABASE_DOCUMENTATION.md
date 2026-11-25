@@ -1,8 +1,8 @@
 # Database documentation
 
-Generated from the models on 24 November 2026: 45 tables. Money columns end in `_ngwee` (whole ngwee). Stock quantities end in `_milli` (thousandths of the ingredient's unit). Times are stored in UTC and shown in Africa/Lusaka time.
+Generated from the models on 24 November 2026: 52 tables. Money columns end in `_ngwee` (whole ngwee). Stock quantities end in `_milli` (thousandths of the ingredient's unit). Times are stored in UTC and shown in Africa/Lusaka time.
 
-The delivery, catering and messages tables and columns were removed in stage 22, after a backup. Stage 23 added user_sessions and notifications, and profile and two-step columns on users.
+The delivery, catering and messages tables and columns were removed in stage 22, after a backup.
 
 ## accounts
 
@@ -46,6 +46,17 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | reference | varchar(60) | no |  |
 | before | text | yes |  |
 | after | text | yes |  |
+
+## case_notes
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| id | varchar(32) | no | primary key |
+| case_kind | varchar(10) | no |  |
+| case_id | varchar(32) | no |  |
+| at | timestamp with time zone | no |  |
+| by | varchar(80) | no |  |
+| note | text | no |  |
 
 ## cash_movements
 
@@ -141,6 +152,35 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | created_at | timestamp with time zone | no |  |
 | created_by | varchar(80) | yes |  |
 
+## error_records
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| id | varchar(32) | no | primary key |
+| fingerprint | varchar(64) | no | unique |
+| reference | varchar(16) | no |  |
+| kind | varchar(80) | no |  |
+| module | varchar(40) | no |  |
+| path | varchar(160) | no |  |
+| method | varchar(8) | no |  |
+| message | varchar(400) | no |  |
+| where | varchar(200) | no |  |
+| count | integer | no |  |
+| first_seen | timestamp with time zone | no |  |
+| last_seen | timestamp with time zone | no |  |
+| status | varchar(10) | no |  |
+| version | varchar(40) | no |  |
+
+## feature_controls
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| key | varchar(40) | no | primary key |
+| enabled | boolean | no |  |
+| reason | varchar(200) | no |  |
+| changed_by | varchar(80) | no |  |
+| changed_at | timestamp with time zone | yes |  |
+
 ## feedback
 
 | Column | Type | Null | Notes |
@@ -166,6 +206,25 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | detail | text | no |  |
 | created_at | timestamp with time zone | no |  |
 | created_by | varchar(80) | yes |  |
+
+## incidents
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| id | varchar(32) | no | primary key |
+| number | varchar(16) | no | unique |
+| title | varchar(140) | no |  |
+| service | varchar(40) | no |  |
+| severity | varchar(10) | no |  |
+| status | varchar(14) | no |  |
+| impact | varchar(300) | no |  |
+| detected_at | timestamp with time zone | no |  |
+| reported_by | varchar(80) | no |  |
+| assigned_to | varchar(80) | no |  |
+| root_cause | text | no |  |
+| resolution | text | no |  |
+| prevention | text | no |  |
+| resolved_at | timestamp with time zone | yes |  |
 
 ## ingredients
 
@@ -553,6 +612,22 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | created_at | timestamp with time zone | no |  |
 | created_by | varchar(80) | yes |  |
 
+## repair_runs
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| id | varchar(32) | no | primary key |
+| operation | varchar(40) | no |  |
+| risk | varchar(10) | no |  |
+| reason | varchar(300) | no |  |
+| status | varchar(12) | no |  |
+| affected | integer | no |  |
+| result | text | no |  |
+| verification | text | no |  |
+| started_by | varchar(80) | no |  |
+| started_at | timestamp with time zone | no |  |
+| finished_at | timestamp with time zone | yes |  |
+
 ## role_permissions
 
 | Column | Type | Null | Notes |
@@ -571,6 +646,22 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | is_system | boolean | no |  |
 | created_at | timestamp with time zone | no |  |
 | created_by | varchar(80) | yes |  |
+
+## security_events
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| id | varchar(32) | no | primary key |
+| at | timestamp with time zone | no |  |
+| kind | varchar(40) | no |  |
+| severity | varchar(10) | no |  |
+| detail | varchar(300) | no |  |
+| account | varchar(120) | no |  |
+| ip | varchar(60) | no |  |
+| path | varchar(160) | no |  |
+| status | varchar(10) | no |  |
+| note | varchar(300) | no |  |
+| reviewed_by | varchar(80) | no |  |
 
 ## settings
 
@@ -653,6 +744,28 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | is_active | boolean | no |  |
 | created_at | timestamp with time zone | no |  |
 | created_by | varchar(80) | yes |  |
+
+## support_tickets
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| id | varchar(32) | no | primary key |
+| number | varchar(16) | no | unique |
+| reporter_id | varchar(32) | no | → users.id |
+| reporter | varchar(80) | no |  |
+| module | varchar(40) | no |  |
+| description | text | no |  |
+| page | varchar(160) | no |  |
+| device | varchar(80) | no |  |
+| app_version | varchar(40) | no |  |
+| error_reference | varchar(40) | no |  |
+| priority | varchar(10) | no |  |
+| status | varchar(14) | no |  |
+| assigned_to | varchar(80) | no |  |
+| resolution | text | no |  |
+| incident_id | varchar(32) | yes | → incidents.id |
+| created_at | timestamp with time zone | no |  |
+| updated_at | timestamp with time zone | no |  |
 
 ## user_sessions
 

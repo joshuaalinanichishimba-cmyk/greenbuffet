@@ -168,7 +168,7 @@ def already_posted(db: Session, source: str, reference: str) -> bool:
 # what the rest of the system posts
 # ---------------------------------------------------------------------------
 
-def post_sale(db: Session, order) -> JournalEntry | None:
+def post_sale(db: Session, order, when: date | None = None) -> JournalEntry | None:
     """A paid order: money in, sales and VAT out.
 
     One line per payment method actually used, so the cash account only ever
@@ -191,7 +191,7 @@ def post_sale(db: Session, order) -> JournalEntry | None:
         lines.append(("2100", 0, order.vat_ngwee, "VAT inside the price"))
     return post(
         db, lines, f"Order {order.number}", source="sale", reference=order.number,
-        who=order.created_by,
+        who=order.created_by, when=when,
     )
 
 
@@ -387,6 +387,21 @@ def post_cash_movement(db: Session, movement, who: str, reverse: bool = False) -
         debit, credit, memo = credit, debit, "Reversed: " + memo
     return post(db, [(debit, amount, 0, memo), (credit, 0, amount, memo)], memo,
                 source="cash", reference=reference, who=who)
+
+
+def post_debt_collected(db: Session, order, payment, who: str) -> JournalEntry | None:
+    """Money taken on an order whose sale is already in the books: a payment
+    that failed earlier, now paid another way. It clears what the customer
+    owed, so the sale is not counted a second time."""
+    reference = f"paid-{payment.id}"
+    if already_posted(db, "collected", reference):
+        return None
+    code = METHOD_ACCOUNTS.get(payment.method)
+    if not code or payment.is_refund:
+        return None
+    memo = f"{order.number}: owed amount paid by {payment.method}"
+    return post(db, [(code, payment.amount_ngwee, 0, memo), ("1100", 0, payment.amount_ngwee, memo)],
+                memo, source="collected", reference=reference, who=who)
 
 
 def post_failed_payment(db: Session, order, payment, who: str) -> JournalEntry | None:

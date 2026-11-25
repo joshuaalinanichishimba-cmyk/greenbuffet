@@ -27,6 +27,7 @@ STARTERS = [
     ("accountant", "accountant@greenbuffet.zm", "Accountant"),
     ("cashier", "cashier@greenbuffet.zm", "Cashier"),
     ("kitchen", "kitchen@greenbuffet.zm", "Kitchen"),
+    ("it", "it@greenbuffet.zm", "IT support"),
 ]
 
 

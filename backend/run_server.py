@@ -117,6 +117,8 @@ def main() -> int:
 
         Base.metadata.create_all(engine)
         added = add_missing_columns(engine)
+        from app.core.schema_update import protect_audit_log
+        protect_audit_log(engine)
         if added:
             log.info("Database brought up to date: %s", ", ".join(added))
         if "categories.earns_stamp" in added:

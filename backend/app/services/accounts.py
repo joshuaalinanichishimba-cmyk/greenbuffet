@@ -264,9 +264,10 @@ def notify_owners(db: Session, kind: str, title: str, body: str = "", link: str 
 
 
 def two_step_required(db: Session, user: User) -> bool:
-    """Owners must use two-step sign-in. The one exception is test sign-in
-    mode on a development machine, which already shares one password."""
-    if user.role_id != "owner":
+    """Owners and the IT administrator must use two-step sign-in. The one
+    exception is test sign-in mode on a development machine, which already
+    shares one password."""
+    if user.role_id not in ("owner", "it"):
         return False
     from app.core.config import settings
     test_mode = db.get(Setting, "signin.fill_passwords")

@@ -14,6 +14,9 @@ from app.models.files import Document  # noqa: F401
 from app.services.numbering import Counter  # noqa: F401
 from app.models.kitchen import KitchenItem  # noqa: F401
 from app.models.people import Attendance, Employee, LeaveRequest, PayrollRun, Payslip  # noqa: F401
+from app.models.ops import (  # noqa: F401
+    CaseNote, ErrorRecord, FeatureControl, Incident, RepairRun, SecurityEvent, Ticket,
+)
 from app.models.stock import (  # noqa: F401
     Purchase, PurchaseLine, StockLevel, StockMove, Supplier, SupplierPayment,
 )

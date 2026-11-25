@@ -61,6 +61,15 @@ async def unhandled(request: Request, exc: Exception) -> JSONResponse:
     # logs\\server.log, so nobody has to guess which of the day's errors it was.
     ref = uuid.uuid4().hex[:6]
     log.exception("Unhandled error [ref %s] on %s %s", ref, request.method, request.url.path)
+    # Also into the IT workspace's error log, grouped with earlier repeats.
+    try:
+        from app.core.database import SessionLocal
+        from app.services.ops import record_error
+        with SessionLocal() as db:
+            record_error(db, exc, request.url.path, request.method, ref)
+            db.commit()
+    except Exception:
+        log.exception("Could not write the error to the error log")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": f"Something went wrong (reference {ref}, {type(exc).__name__}). "
@@ -77,6 +86,68 @@ DEMO_BLOCKED = (
     ("POST", "/api/v1/team/"), ("DELETE", "/api/v1/"),
     ("PUT", "/api/v1/settings"), ("POST", "/api/v1/settings/backups"), ("POST", "/api/v1/profile/me/photo"),
 )
+
+
+# Paths that keep working in read-only mode and while orders are stopped:
+# signing in and out, the heartbeat, notices, problem reports and the IT
+# workspace itself, so the people fixing a fault can still work.
+ALWAYS_OPEN = ("/api/v1/auth/", "/api/v1/presence/", "/api/v1/notifications", "/api/v1/it/",
+               "/api/v1/tickets", "/api/v1/profile/me")
+
+
+def _client_ip(request) -> str:
+    return request.client.host if request.client else ""
+
+
+@app.middleware("http")
+async def controls_and_limits(request, call_next):
+    """Rate limits and the emergency controls, before any route runs."""
+    from fastapi.responses import JSONResponse
+    from app.services.ops import LIMITS, limiter
+
+    path, method = request.url.path, request.method
+    for prefix, only, count, seconds in LIMITS:
+        if path.startswith(prefix) and (only is None or only == method):
+            # Per address, plus the signed-in token when there is one, so a
+            # whole restaurant behind one mobile router is not one bucket.
+            who = _client_ip(request) + "|" + request.headers.get("authorization", "")[-16:]
+            if not limiter.allow(f"{prefix}|{who}", count, seconds):
+                try:
+                    from app.core.database import SessionLocal
+                    from app.services.ops import security_event
+                    with SessionLocal() as db:
+                        security_event(db, "rate_limited", "medium", f"Over {count} requests in {seconds}s",
+                                       ip=_client_ip(request), path=path)
+                        db.commit()
+                except Exception:
+                    pass
+                return JSONResponse(status_code=429, content={
+                    "detail": "Too many requests in a short time. Wait a minute and try again."})
+            break
+
+    if method not in ("GET", "HEAD", "OPTIONS") and path.startswith("/api/v1/") and not path.startswith(ALWAYS_OPEN):
+        from app.core.database import SessionLocal
+        from app.services.ops import control
+        try:
+            with SessionLocal() as db:
+                read_only = control(db, "read_only")
+                taking = control(db, "take_orders")
+        except Exception:
+            read_only, taking = False, True
+        if read_only or (not taking and path == "/api/v1/sales/orders" and method == "POST"):
+            role = ""
+            from app.core.security import decode_token
+            header = request.headers.get("authorization", "")
+            claims = decode_token(header[7:]) if header.lower().startswith("bearer ") else None
+            role = (claims or {}).get("role", "")
+            if read_only and role not in ("owner", "it"):
+                return JSONResponse(status_code=503, content={
+                    "detail": "The system is in read-only mode while a problem is fixed. You can look, "
+                              "but nothing can be changed yet. Ask the owner or IT how long it will be."})
+            if not taking and path == "/api/v1/sales/orders":
+                return JSONResponse(status_code=503, content={
+                    "detail": "New orders are stopped for now. The kitchen is finishing the orders it has."})
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -99,6 +170,15 @@ async def security_headers(request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # Only this site's own scripts run. Styles may be inline (the screens set
+    # widths and colours on elements); images may be data: or blob: (photos
+    # are fetched with the sign-in token and shown from memory).
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; "
+        "connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; "
+        "object-src 'none'; manifest-src 'self'; worker-src 'self'"
+    )
     if settings.ENVIRONMENT != "development":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response

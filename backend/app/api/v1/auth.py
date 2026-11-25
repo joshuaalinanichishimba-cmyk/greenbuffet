@@ -46,6 +46,9 @@ def _failed(db: Session, email: str, request: Request, why: str) -> None:
     device, browser = describe_device(request.headers.get("user-agent", ""))
     db.add(LoginAttempt(email=email, at=moment, succeeded=False,
                         ip=request.client.host if request.client else "", device=f"{device}, {browser}"))
+    from app.services.ops import security_event
+    security_event(db, "failed_sign_in", "low", f"Wrong {why}", account=email,
+                   ip=request.client.host if request.client else "", path=request.url.path, every_seconds=60)
     db.flush()
     since = moment - timedelta(minutes=LOCKOUT_MINUTES)
     failures = db.scalar(select(func.count(LoginAttempt.id)).where(
@@ -53,6 +56,9 @@ def _failed(db: Session, email: str, request: Request, why: str) -> None:
     if failures == MAX_FAILURES:
         known = db.scalar(select(User).where(User.email == email))
         record(db, "System", "security", "Sign-in locked", f"{MAX_FAILURES} wrong {why} in {LOCKOUT_MINUTES} min", email)
+        security_event(db, "sign_in_locked", "high", f"{MAX_FAILURES} wrong {why} in {LOCKOUT_MINUTES} minutes",
+                       account=email, ip=request.client.host if request.client else "", path=request.url.path,
+                       every_seconds=0)
         notify_owners(db, "failed_logins", f"{known.name if known else email}: sign-in locked",
                       f"{MAX_FAILURES} wrong {why} in {LOCKOUT_MINUTES} minutes from {device}, {browser}. "
                       "It unlocks by itself; a password reset unlocks it now.",
@@ -98,7 +104,7 @@ def _article(word: str) -> str:
 
 
 # What each kind of account opens on, in the words of the sign-in screen.
-SIGN_IN_ORDER = ["owner", "manager", "accountant", "cashier", "kitchen"]
+SIGN_IN_ORDER = ["owner", "manager", "accountant", "cashier", "kitchen", "it"]
 SIGN_IN_SEES = {
     "owner": "Everything: sales, money, staff and settings",
     "manager": "Service, approvals at the till, menu, stock, staff and reports",
