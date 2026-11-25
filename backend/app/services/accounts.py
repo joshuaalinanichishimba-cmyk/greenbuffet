@@ -233,6 +233,7 @@ OPTIONAL_KINDS = {
     "failed_logins": "Repeated wrong passwords on an account",
     "security_changed": "Someone's security settings change",
     "new_device": "An owner signs in on a new device",
+    "offline_sales": "An offline sale arrives at a different price, or after its till closed",
 }
 
 
@@ -252,6 +253,11 @@ def notify(db: Session, users: list[User], kind: str, title: str, body: str = ""
             continue
         db.add(Notification(user_id=u.id, at=moment, kind=kind, level=level,
                             title=title[:120], body=body[:300], link=link[:120]))
+        if not optional:
+            # Security notices about a person's own account also go by email,
+            # to a confirmed address, so a stolen session is noticed off-site.
+            from app.services.email import send_alert
+            send_alert(db, u, title, body)
 
 
 def owners(db: Session) -> list[User]:
@@ -261,6 +267,11 @@ def owners(db: Session) -> list[User]:
 def notify_owners(db: Session, kind: str, title: str, body: str = "", link: str = "",
                   level: str = "info", exclude: str | None = None) -> None:
     notify(db, [o for o in owners(db) if o.id != exclude], kind, title, body, link, level)
+
+
+def has_two_step(user: User) -> bool:
+    """An authenticator app, or email codes to a confirmed address."""
+    return bool(user.totp_enabled or (user.two_step_method == "email" and user.email_verified_at))
 
 
 def two_step_required(db: Session, user: User) -> bool:

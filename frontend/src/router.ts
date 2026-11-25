@@ -6,6 +6,8 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', component: () => import('./views/LoginView.vue'), meta: { public: true } },
+    { path: '/forgot-password', component: () => import('./views/ResetPasswordView.vue'), meta: { public: true } },
+    { path: '/reset-password', component: () => import('./views/ResetPasswordView.vue'), meta: { public: true } },
     { path: '/change-password', component: () => import('./views/ChangePasswordView.vue') },
     {
       path: '/',

@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from app.core.config import settings
 from app.core.database import SessionLocal, engine
 from app.core.permissions import RETIRED_ROLES, DEFAULT_ROLES, PERMISSION_CATALOGUE
-from app.core.schema_update import add_missing_columns, drop_retired, protect_audit_log
+from app.core.schema_update import add_missing_columns, drop_retired, ensure_unique_indexes, protect_audit_log
 from app.core.security import generate_temp_password, hash_password
 from app.models.access import Permission, Role, RolePermission, Setting, User
 from app.models import Base  # registers every table
@@ -63,6 +63,7 @@ def seed(owner_email: str = "owner@greenbuffet.zm", owner_password: str | None =
     # create_all alone would leave the old table as it was.
     changed = add_missing_columns(engine)
     protect_audit_log(engine)
+    ensure_unique_indexes(engine)
     if changed:
         print(f"Database brought up to date: {', '.join(changed)}")
     # The retired customer-ordering tables and columns go, once. update.ps1

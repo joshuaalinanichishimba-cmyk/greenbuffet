@@ -170,7 +170,24 @@ def patch_user(user_id: str, body: UserPatchIn, db: Session = Depends(get_db), u
         if new_email != target.email:
             if db.scalar(select(User).where(User.email == new_email, User.id != target.id)):
                 raise HTTPException(status.HTTP_409_CONFLICT, "That email already has an account.")
+            if target.id == user.id:
+                raise HTTPException(status.HTTP_409_CONFLICT,
+                                    "Change your own email from your profile, where both addresses are confirmed.")
+            if target.role_id == "owner":
+                # Sign-in codes and reset links go to this address; one owner
+                # must never be able to redirect the other's.
+                raise HTTPException(status.HTTP_409_CONFLICT,
+                                    "An owner's email can only be changed by that owner, from their profile.")
+            from app.services import email as mail
+            mail.send_alert(db, target, "Your Green Buffet email address was changed",
+                            f"{user.name} changed it to {mail.mask(new_email)}.")
             target.email = new_email
+            # The new address has not been proved, so it gets no codes or
+            # links until its owner confirms it.
+            target.email_verified_at = None
+            if target.two_step_method == "email":
+                target.two_step_method = ""
+            mail.cancel_all(db, target)
             db.query(LoginAttempt).filter(LoginAttempt.email == new_email).delete()
     if body.role_id:
         if not db.get(Role, body.role_id):

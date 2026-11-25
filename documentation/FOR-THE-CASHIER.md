@@ -63,6 +63,23 @@ A small difference happens. A manager will go through it with you. It is a
 conversation, not an accusation, and nothing is taken from your pay.
 You cannot close the till while an order on it is unpaid.
 
+## When the connection drops
+
+A yellow bar says "No connection to the server" and the till shows
+**Offline**. Keep serving:
+
+1. Take the order as usual. **Cash only**, no discounts, codes or stamp
+   cards.
+2. Press **Take cash (offline)**, type the cash given, press **Take cash**.
+3. Print the receipt. It has a number like **T-3**. Give the kitchen its
+   copy: their screen cannot see the order yet.
+4. When the connection is back, the till sends the sales by itself. Leave
+   the till signed in until the bar says nothing is waiting.
+
+You cannot close the till while sales are waiting to send. If one shows
+under "Offline sales the server could not take", call a manager; the cash
+stays in the drawer.
+
 ## Things that go wrong
 
 **"Open the till before taking an order."** You have not opened the till yet,

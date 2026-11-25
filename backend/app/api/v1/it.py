@@ -151,8 +151,23 @@ def _configuration() -> list[dict]:
                       f"{settings.ENVIRONMENT}" + (" (test sign-in mode allowed)" if settings.ENVIRONMENT != "production"
                                                     else "")))
     # Integrations not built or not set up yet: said plainly, never "ok".
-    out.append(_check("email", "Email delivery", "not_configured",
-                      "No email provider is set up yet, so codes and alerts are in the system only"))
+    from app.services import email as mail
+    from app.models.access import EmailMessage
+    info = mail.status()
+    if not info["configured"]:
+        out.append(_check("email", "Email delivery", "not_configured",
+                          "No email provider is set up yet, so codes and alerts are in the system only"))
+    else:
+        with __import__("app.core.database", fromlist=["SessionLocal"]).SessionLocal() as db2:
+            day = now() - timedelta(hours=24)
+            sent = db2.scalar(select(func.count(EmailMessage.id)).where(EmailMessage.at >= day, EmailMessage.status == "sent")) or 0
+            failed = db2.scalar(select(func.count(EmailMessage.id)).where(EmailMessage.at >= day, EmailMessage.status == "failed")) or 0
+        state = "operational" if not failed else ("critical" if not sent else "degraded")
+        if not sent and not failed:
+            state = "unknown"
+        out.append(_check("email", "Email delivery", state,
+                          f"{info['mode']} via {info['host'] or 'files'} from {info['from']}. Last 24 h: {sent} sent, {failed} failed"
+                          + ("" if sent or failed else " (nothing sent yet, so not proven; use Send a test email)")))
     out.append(_check("lenco", "Lenco payments", "not_configured",
                       "Not connected yet; mobile money and card are recorded by hand with their reference"))
     out.append(_check("storage", "File storage", "degraded" if os.environ.get("RENDER") else "operational",
@@ -355,7 +370,7 @@ NOT_AVAILABLE = [
     ("Restart the server", "Needs the hosting provider's API key (Render). On the restaurant PC: scripts\\update.ps1."),
     ("Roll back a deployment", "Needs the hosting provider's API and a deployed copy; not set up yet."),
     ("Re-check pending Lenco payments", "Lenco is not connected yet."),
-    ("Retry failed emails", "No email provider is set up yet."),
+    ("Retry failed emails", "Not offered on purpose: codes expire in minutes, so a person asks for a new one instead. Use Email, Send a test to check the settings."),
     ("Restore a backup", "Critical: only on the server computer with scripts\\restore.ps1, which tests it in a separate database first."),
 ]
 
@@ -824,3 +839,35 @@ def resources(db: Session = Depends(get_db), _: User = Depends(can_view)) -> dic
         "uptime_minutes": round((time.time() - STARTED) / 60), "version": APP_VERSION,
         "hosting_costs": "Not connected to a hosting account. See documentation\\HOSTING-COSTS.md for the estimate.",
     }
+
+
+
+# ---- email ----------------------------------------------------------------------------
+
+@router.get("/it/email")
+def email_overview(db: Session = Depends(get_db), _: User = Depends(can_view)) -> dict:
+    """Delivery records without bodies: no code or link is ever shown here."""
+    from app.services import email as mail
+    from app.models.access import EmailMessage
+    rows = db.scalars(select(EmailMessage).order_by(EmailMessage.at.desc()).limit(100)).all()
+    return {"status": mail.status(),
+            "messages": [{"at": m.at.isoformat(), "to": mail.mask(m.to), "purpose": m.purpose, "subject": m.subject
+                          if m.purpose == "alert" or m.purpose == "test" else m.purpose.replace("_", " "),
+                          "status": m.status, "error": m.error, "ms": m.ms} for m in rows]}
+
+
+@router.post("/it/email/test")
+def email_test(db: Session = Depends(get_db), user: User = Depends(can_view)) -> dict:
+    """A test message to the IT person's own confirmed address, nobody else's."""
+    from app.services import email as mail
+    if not user.email_verified_at:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Confirm your own email address first (Profile, Security).")
+    try:
+        mail.send(db, user.email, "Green Buffet test email", f"Sent from the IT workspace by {user.name}. "
+                  "If you can read this, email from the system works.", "test")
+        result = {"ok": True, "detail": f"Sent to {mail.mask(user.email)}. Check that it arrived."}
+    except mail.EmailNotSent as exc:
+        result = {"ok": False, "detail": str(exc)}
+    record(db, user.name, "it", "Test email", result["detail"])
+    db.commit()
+    return result

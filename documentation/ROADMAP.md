@@ -36,11 +36,11 @@ management system: customers do not order through it.
 | 22 | Plan phases 0 and 1: protection, cash and till controls, owner protection | 2 days | Done |
 | 23 | Profiles, online status, team directory, devices, two-step sign-in, lock screen | 1 day | Done |
 | 24 | IT workspace, security centre, append-only audit, rate limits | 1 day | Done |
-| 25 | Email: verified addresses, email codes, reset links, email change; approval thresholds | 2–3 days | Needs an email provider |
+| 25 | Email: verified addresses, email codes, reset links, email change, security notices | 1 day | Built; switched on last, at go-live |
 | 26 | Lenco payments, webhooks, settlement, background jobs | 3–5 days | Needs Lenco sandbox keys |
-| 27 | Installable app (PWA) and offline cash sales | about 1 week | Next |
-| 28 | Expenses, waste, expiry, checklists, food safety, equipment, periods, rotas, till handover, discount report | about 1 week | |
-| 29 | Vercel + Render production, CI, monitoring, storage, go-live | 3–5 days | Accounts, domain, approval to pay |
+| 27 | Installable app (PWA) and offline cash sales | 1 day | Done |
+| 28 | Expenses, waste, expiry, checklists, food safety, equipment, periods, rotas, till handover, discount report, approval thresholds and dual approval, owner security summary | about 1 week | Next |
+| 29 | Vercel + Render production, CI, monitoring, storage, push notifications, then email and two-step switched on, go-live | 3–5 days | Accounts, domain, approval to pay |
 
 ## What Stage 1 contains
 

@@ -10,7 +10,7 @@ const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
 export const lastError = { reference: '', message: '', at: 0 }
 
 /** Shown on reports and in the IT workspace; raised with each release. */
-export const APP_VERSION = '1.24.0'
+export const APP_VERSION = '1.27.0'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -34,6 +34,16 @@ export function setToken(value: string | null) {
   }
 }
 
+// Whether the last request reached the server. The offline till listens for
+// the change rather than asking, so it knows the moment the network drops or
+// comes back.
+let lastReached = true
+function reached(ok: boolean) {
+  if (ok === lastReached) return
+  lastReached = ok
+  window.dispatchEvent(new CustomEvent('gb-reachable', { detail: ok }))
+}
+
 export function getToken(): string | null {
   return token
 }
@@ -53,8 +63,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
     response = await fetch(`${BASE}${path}`, { ...options, headers })
   } catch {
-    throw new ApiError(0, 'Cannot reach the server. Check that the backend is running.')
+    reached(false)
+    throw new ApiError(0, 'Cannot reach the server. Check the network, or that the system is running.')
   }
+  reached(true)
 
   // A 401 on the login form means the details were wrong; a 401 anywhere else
   // means the token has expired. Showing the wrong one of those two confuses
@@ -103,6 +115,8 @@ export interface User {
   photo_id?: string | null
   totp_enabled?: boolean
   two_step_required?: boolean
+  email_verified?: boolean
+  two_step_method?: string
 }
 
 export interface LoginResult {
@@ -1048,7 +1062,8 @@ export interface Profile extends TeamCard {
   created_at: string | null
   created_by: string
   responsibilities: { area: string; items: string[] }[]
-  two_step: { enabled: boolean; required: boolean }
+  two_step: { enabled: boolean; app: boolean; method: string; required: boolean }
+  email_verified: boolean
   tabs: string[]
   can: Record<'edit_account' | 'edit_employment' | 'change_role' | 'suspend' | 'restore' | 'archive'
     | 'reset_password' | 'revoke_sessions' | 'reset_two_step', boolean>

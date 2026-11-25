@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.models.ops import ErrorRecord, FeatureControl, SecurityEvent
 
-APP_VERSION = "1.24.0"
+APP_VERSION = "1.27.0"
 
 # key: (default, label, what it means for the restaurant)
 CONTROLS = {
@@ -154,6 +154,9 @@ LIMITS = [
     ("/api/v1/auth/login", "POST", SIGN_IN_PER_MINUTE, 60),
     ("/api/v1/auth/unlock", "POST", 20, 60),
     ("/api/v1/auth/two-step", "POST", 20, 60),
+    ("/api/v1/auth/password", "POST", 10, 60),
+    ("/api/v1/auth/email", "POST", 20, 60),
+    ("/api/v1/auth/login/", "POST", 20, 60),
     ("/api/v1/presence/heartbeat", "POST", 240, 60),
     ("/api/v1/", None, 1200, 60),
 ]

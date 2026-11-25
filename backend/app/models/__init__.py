@@ -1,6 +1,6 @@
 """Importing this package registers every table with SQLAlchemy."""
 from app.models.access import (  # noqa: F401
-    AuditLog, LoginAttempt, Notification, Permission, Role, RolePermission, Setting, User, UserSession,
+    AuditLog, EmailChallenge, EmailMessage, LoginAttempt, Notification, Permission, Role, RolePermission, Setting, User, UserSession,
 )
 from app.models.base import Base  # noqa: F401
 from app.models.menu import (  # noqa: F401

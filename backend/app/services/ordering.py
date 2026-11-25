@@ -47,12 +47,18 @@ def business_vat_rate(db: Session) -> int:
         return 16
 
 
-def build_lines(db: Session, order: Order, wanted_lines) -> Priced:
+def build_lines(db: Session, order: Order, wanted_lines, already_sold: bool = False) -> Priced:
     """Adds priced lines to `order` and returns the totals before discount.
 
     `wanted_lines` is any sequence of objects with `product_id`, `quantity`,
     `note` and `options` (each with `option_item_id`), which is what both the
     till schema and the public schema produce.
+
+    already_sold is for a sale the till took while it could not reach the
+    server. The customer has paid and eaten, so an item switched off or sold
+    out since then, or a choice rule changed since, cannot undo it. Only an
+    item that no longer exists at all is refused, because there is nothing
+    to price it from.
     """
     vat_rate = business_vat_rate(db)
     subtotal = 0
@@ -60,9 +66,9 @@ def build_lines(db: Session, order: Order, wanted_lines) -> Priced:
 
     for position, wanted in enumerate(wanted_lines, start=1):
         product = db.get(Product, wanted.product_id)
-        if not product or not product.is_active:
+        if not product or (not product.is_active and not already_sold):
             raise OrderProblem("That item is not on the menu.")
-        if not product.is_available:
+        if not product.is_available and not already_sold:
             raise OrderProblem(f"{product.name} is sold out.", code=409)
 
         allowed_groups = {link.group_id: link.group for link in product.option_links}
@@ -70,18 +76,18 @@ def build_lines(db: Session, order: Order, wanted_lines) -> Priced:
         options_total = 0
         for choice in wanted.options:
             item = db.get(OptionItem, choice.option_item_id)
-            if not item or not item.is_active:
+            if not item or (not item.is_active and not already_sold):
                 raise OrderProblem("Unknown choice.")
             if item.group_id not in allowed_groups:
                 raise OrderProblem(f"{item.name} is not offered with {product.name}.")
-            if not item.is_available:
+            if not item.is_available and not already_sold:
                 raise OrderProblem(f"{item.name} is sold out.", code=409)
             chosen.setdefault(item.group_id, []).append(item)
 
         # Each group's own rule, checked here because the browser cannot be
         # trusted to have checked it.
         for group_id, group in allowed_groups.items():
-            if not group.is_active:
+            if not group.is_active or already_sold:
                 continue
             picked = len(chosen.get(group_id, []))
             if picked < group.min_select:

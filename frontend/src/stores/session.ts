@@ -33,6 +33,26 @@ function writeExpiry(iso: string | null) {
   }
 }
 
+// Who is signed in, kept on this device so a page reloaded with the network
+// down still knows whose till it is. Names and permissions only: the server
+// still checks every request, and nothing here signs anyone in.
+const ME_KEY = 'gb-me'
+function keepMe(u: User | null, p: string[]) {
+  try {
+    u ? localStorage.setItem(ME_KEY, JSON.stringify({ user: u, permissions: p })) : localStorage.removeItem(ME_KEY)
+  } catch {
+    /* private browsing */
+  }
+}
+function keptMe(): { user: User; permissions: string[] } | null {
+  try {
+    const raw = localStorage.getItem(ME_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 let justTyped = ''
 
 /** The password just used to sign in, once, then forgotten. */
@@ -81,6 +101,7 @@ export const session = {
     writeExpiry(result.expires_at)
     user.value = result.user
     permissions.value = result.permissions
+    keepMe(result.user, result.permissions)
   },
 
   async restore() {
@@ -100,9 +121,22 @@ export const session = {
       user.value = result.user
       permissions.value = result.permissions
       expiresAt.value = expiry
-    } catch {
-      setToken(null)
-      writeExpiry(null)
+      keepMe(result.user, result.permissions)
+    } catch (e) {
+      // The server could not be reached at all (status 0): keep the session
+      // and the details from last time, so the till can keep selling for
+      // cash. Any other answer means the sign-in is no longer good.
+      const me = (e as { status?: number }).status === 0 ? keptMe() : null
+      if (me) {
+        user.value = me.user
+        permissions.value = me.permissions
+        expiresAt.value = expiry
+        connected.value = false
+      } else {
+        setToken(null)
+        writeExpiry(null)
+        keepMe(null, [])
+      }
     } finally {
       ready.value = true
     }
@@ -111,6 +145,7 @@ export const session = {
   /** Keeps the signed-in details in step after the user edits their own account. */
   update(next: User) {
     user.value = next
+    keepMe(next, permissions.value)
   },
 
   /** Ends this device's session on the server too (best effort), then here. */
@@ -128,6 +163,7 @@ export const session = {
     unread.value = 0
     setToken(null)
     writeExpiry(null)
+    keepMe(null, [])
     user.value = null
     permissions.value = []
   },

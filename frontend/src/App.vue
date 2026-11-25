@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import LockScreen from './components/LockScreen.vue'
 import { startPresence, stopPresence } from './services/presence'
+import { startOffline, stopOffline } from './services/offline'
 import { session } from './stores/session'
 
 const router = useRouter()
@@ -28,6 +29,9 @@ function onTwoStep() {
 watch(() => session.signedIn.value, (on) => {
   if (on) startPresence(() => router.currentRoute.value.path)
   else stopPresence()
+  // Offline sales waiting on this device are sent for whoever signs in.
+  if (on && session.user.value) startOffline(session.user.value.id)
+  else stopOffline()
 }, { immediate: true })
 
 onMounted(() => {

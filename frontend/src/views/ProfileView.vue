@@ -275,6 +275,59 @@ async function turnOff() {
   }
 }
 
+// ---- email: confirm, change, use for two-step ----
+const emailStep = ref<'' | 'verify' | 'change' | 'change-codes'>('')
+const emailCode = ref('')
+const change = ref({ password: '', new_email: '', group: '', needs_old: false, old: '', new: '', old_code: '', new_code: '' })
+const emailMsg = ref('')
+
+async function emailCall(fn: () => Promise<void>, fallback: string) {
+  busy.value = true
+  error.value = ''
+  try {
+    await fn()
+  } catch (e) {
+    fail(e, fallback)
+  } finally {
+    busy.value = false
+  }
+}
+const startVerify = () => emailCall(async () => {
+  const r = await api.post<{ sent_to: string }>('/auth/email/verify/start')
+  emailMsg.value = `Code sent to ${r.sent_to}. It works for 5 minutes.`
+  emailStep.value = 'verify'
+  emailCode.value = ''
+}, 'Could not send the code.')
+const confirmVerify = () => emailCall(async () => {
+  await api.post('/auth/email/verify/confirm', { code: emailCode.value })
+  emailStep.value = ''
+  emailMsg.value = 'Email address confirmed.'
+  if (session.user.value) session.user.value = { ...session.user.value, email_verified: true }
+  await load()
+}, 'That code did not work.')
+const startChange = () => emailCall(async () => {
+  const r = await api.post<{ group: string; needs_old: boolean; old: string; new: string }>('/auth/email/change/start',
+    { password: change.value.password, new_email: change.value.new_email })
+  change.value = { ...change.value, ...r, password: '', old_code: '', new_code: '' }
+  emailStep.value = 'change-codes'
+  emailMsg.value = ''
+}, 'Could not start the change.')
+const confirmChange = () => emailCall(async () => {
+  const r = await api.post<{ email: string }>('/auth/email/change/confirm',
+    { group: change.value.group, old_code: change.value.old_code, new_code: change.value.new_code })
+  emailStep.value = ''
+  emailMsg.value = `Your email is now ${r.email}. Other devices were signed out.`
+  if (session.user.value) session.user.value = { ...session.user.value, email: r.email, email_verified: true }
+  await load()
+}, 'Those codes did not work.')
+const useMethod = (method: 'email' | 'app') => emailCall(async () => {
+  const r = await api.post<{ recovery_codes: string[] }>('/auth/email/two-step', { method })
+  if (r.recovery_codes.length) recovery.value = r.recovery_codes
+  if (session.user.value) session.user.value = { ...session.user.value, two_step_required: false, two_step_method: method }
+  emailMsg.value = method === 'email' ? 'Signing in now asks for a code sent to your email.' : 'Signing in now asks for the code from the app.'
+  await load()
+}, 'Could not change it.')
+
 // ---- notices ----
 async function savePrefs(kind: string, on: boolean) {
   if (!profile.value?.preferences) return
@@ -314,7 +367,7 @@ const variance = (v: number | null) => (v === null ? 'Open' : v === 0 ? 'Exact' 
         <Icon name="shield" :size="22" />
         <div class="text">
           <b>Owner accounts must use two-step sign-in</b>
-          <span>Set it up below with an authenticator app on your phone. The rest of the system opens once it is on.</span>
+          <span>Confirm your email and choose email codes, or set up an authenticator app, below. The rest of the system opens once one is on.</span>
         </div>
       </section>
 
@@ -631,9 +684,59 @@ const variance = (v: number | null) => (v === null ? 'Open' : v === 0 ? 'Exact' 
       <!-- ===== security ===== -->
       <section v-if="tab === 'security'" class="stack">
         <div class="card">
-          <div class="card-head"><h3>Two-step sign-in</h3>
-            <span class="pill" :class="profile.two_step.enabled ? '' : profile.two_step.required ? 'danger' : 'neutral'">
-              {{ profile.two_step.enabled ? 'On' : profile.two_step.required ? 'Required, not set up' : 'Off' }}</span></div>
+          <div class="card-head"><h3>Email address</h3>
+            <span class="pill" :class="profile.email_verified ? '' : 'warn'">{{ profile.email_verified ? 'Confirmed' : 'Not confirmed' }}</span></div>
+          <p class="muted">{{ profile.email }}. {{ profile.email_verified
+            ? 'Sign-in codes, password reset links and security notices can go here.'
+            : 'Until it is confirmed, no codes, reset links or notices are sent to it.' }}</p>
+          <p v-if="emailMsg && isMe" class="ok">{{ emailMsg }}</p>
+          <template v-if="isMe">
+            <div class="row wrap">
+              <button v-if="!profile.email_verified && emailStep !== 'verify'" class="btn btn-primary btn-sm" :disabled="busy" @click="startVerify">Send me a code</button>
+              <button v-if="emailStep !== 'change' && emailStep !== 'change-codes'" class="btn btn-outline btn-sm" @click="emailStep = 'change'; emailMsg = ''">Change email address</button>
+            </div>
+            <form v-if="emailStep === 'verify'" class="row" @submit.prevent="confirmVerify">
+              <input v-model="emailCode" class="input inline code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Code" />
+              <button class="btn btn-primary btn-sm" :disabled="busy || emailCode.length !== 6">Confirm</button>
+              <button type="button" class="link small" :disabled="busy" @click="startVerify">Send again</button>
+            </form>
+            <form v-if="emailStep === 'change'" class="ask" @submit.prevent="startChange">
+              <p class="muted small">A code goes to the new address{{ profile.email_verified ? ' and one to your current address' : '' }}. Nothing changes until both are entered.</p>
+              <input v-model="change.new_email" class="input" type="email" placeholder="New email address" required />
+              <input v-model="change.password" class="input" type="password" placeholder="Your password" autocomplete="current-password" required />
+              <div class="row"><button class="btn btn-primary btn-sm" :disabled="busy">Send the codes</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="emailStep = ''">Cancel</button></div>
+            </form>
+            <form v-if="emailStep === 'change-codes'" class="ask" @submit.prevent="confirmChange">
+              <label v-if="change.needs_old" class="field">Code sent to {{ change.old }}
+                <input v-model="change.old_code" class="input inline code" inputmode="numeric" maxlength="6" required /></label>
+              <label class="field">Code sent to {{ change.new }}
+                <input v-model="change.new_code" class="input inline code" inputmode="numeric" maxlength="6" required /></label>
+              <div class="row"><button class="btn btn-primary btn-sm" :disabled="busy">Change my email</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="emailStep = ''">Cancel</button></div>
+            </form>
+          </template>
+        </div>
+
+        <div v-if="isMe" class="card">
+          <div class="card-head"><h3>How the second step works</h3></div>
+          <p class="muted">After your password, sign-in asks for a six-digit code, from your email or from an authenticator app.
+            Email codes are only as safe as your email account, so protect that with its own two-step sign-in.</p>
+          <div class="row wrap">
+            <button class="btn btn-sm" :class="profile.two_step.method === 'email' ? 'btn-primary' : 'btn-outline'"
+                    :disabled="busy || !profile.email_verified || profile.two_step.method === 'email'" @click="useMethod('email')">
+              Email codes{{ profile.two_step.method === 'email' ? ' (in use)' : '' }}</button>
+            <button class="btn btn-sm" :class="profile.two_step.method === 'app' ? 'btn-primary' : 'btn-outline'"
+                    :disabled="busy || !profile.two_step.app || profile.two_step.method === 'app'" @click="useMethod('app')">
+              Authenticator app{{ profile.two_step.method === 'app' ? ' (in use)' : profile.two_step.app ? '' : ' (set up below first)' }}</button>
+          </div>
+          <p v-if="!profile.email_verified" class="muted small note">Confirm your email address above to use email codes.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Authenticator app</h3>
+            <span class="pill" :class="profile.two_step.app ? '' : profile.two_step.required && !profile.two_step.enabled ? 'danger' : 'neutral'">
+              {{ profile.two_step.app ? 'Set up' : profile.two_step.required && !profile.two_step.enabled ? 'Required, not set up' : 'Not set up' }}</span></div>
           <p class="muted">A six-digit code from an authenticator app on {{ isMe ? 'your' : 'their' }} phone, as well as the password.
             Google Authenticator, Microsoft Authenticator and Authy all work.{{ profile.two_step.required ? ' Required for owner accounts.' : '' }}</p>
 
@@ -644,7 +747,7 @@ const variance = (v: number | null) => (v === null ? 'Open' : v === 0 ? 'Exact' 
               <ul><li v-for="c in recovery" :key="c"><code>{{ c }}</code></li></ul>
               <button class="btn btn-primary btn-sm" @click="recovery = []">I have written them down</button>
             </div>
-            <template v-else-if="!profile.two_step.enabled">
+            <template v-else-if="!profile.two_step.app">
               <button v-if="!setup" class="btn btn-primary" :disabled="busy" @click="startTwoStep">Set up two-step sign-in</button>
               <div v-else class="setup">
                 <img :src="setup.qr" alt="QR code for the authenticator app" width="220" height="220" />

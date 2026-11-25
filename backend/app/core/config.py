@@ -25,6 +25,18 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     APP_TIMEZONE: str = "Africa/Lusaka"
     BUSINESS_NAME: str = "The Green Buffet"
+    # Where links in emails point (password reset).
+    APP_URL: str = "http://localhost:8000"
+    # Email: "off", "smtp", or "file" (development and tests only: each
+    # message is written to EMAIL_FILE_DIR instead of being sent).
+    EMAIL_MODE: str = "off"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    EMAIL_FROM: str = ""
+    EMAIL_FROM_NAME: str = "The Green Buffet"
+    EMAIL_FILE_DIR: str = ""
 
     @field_validator("DATABASE_URL")
     @classmethod

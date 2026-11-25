@@ -27,6 +27,8 @@ class UserOut(BaseModel):
     totp_enabled: bool = False
     # An owner without two-step sign-in: the screens send them to set it up.
     two_step_required: bool = False
+    email_verified: bool = False
+    two_step_method: str = ""
 
 
 class LoginOut(BaseModel):
@@ -37,6 +39,9 @@ class LoginOut(BaseModel):
     # The password was right and the account uses two-step sign-in: the
     # ticket goes back with the six-digit code to /auth/login/code.
     needs_code: bool = False
+    # "app" or "email"; for email, the masked address the code went to.
+    code_by: str = ""
+    sent_to: str = ""
     ticket: str = ""
     session_id: str = ""
 

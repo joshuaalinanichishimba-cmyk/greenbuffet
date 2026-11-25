@@ -110,6 +110,17 @@ class Order(Base, TimestampMixin):
     vat_ngwee: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # ---- a sale taken while the till could not reach the server ------------
+    # The till gives each one its own id before anything is sent, and the
+    # server keeps it here. However many times the till tries again, one id
+    # makes one sale. Unique in the database, not only in the code.
+    offline_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    # When the customer actually paid, by the till's clock. created_at and
+    # paid_at hold the same moment, so the day's reports put the sale on the
+    # right day; this keeps a record that it arrived late.
+    offline_taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    offline_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_by: Mapped[str | None] = mapped_column(String(80), nullable=True)
     cancel_reason: Mapped[str] = mapped_column(String(300), default="", nullable=False)

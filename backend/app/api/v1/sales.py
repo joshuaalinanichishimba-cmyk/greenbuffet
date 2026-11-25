@@ -697,7 +697,7 @@ def take_payment(
     return _order_out(found)
 
 
-def _post_books(db: Session, order: Order) -> None:
+def _post_books(db: Session, order: Order, when: date | None = None) -> None:
     """Writes the journal entries for a paid order.
 
     The books must never stop the till. If an entry cannot be written the sale
@@ -708,7 +708,7 @@ def _post_books(db: Session, order: Order) -> None:
 
     try:
         db.flush()
-        post_sale(db, order)
+        post_sale(db, order, when)
         used = db.scalar(
             select(func.coalesce(func.sum(StockMove.value_ngwee), 0)).where(
                 StockMove.kind == "sale", StockMove.reference == order.number

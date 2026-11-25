@@ -19,3 +19,13 @@ import { applyTheme, savedTheme } from './services/theme'
 applyTheme(savedTheme())
 
 createApp(App).use(createPinia()).use(router).mount('#app')
+
+// The service worker lets the screens open with the network down and makes
+// the system installable as an app. Only in the built system: in development
+// it would keep stale copies of files that change on every save. Browsers
+// only allow it on https or on localhost.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+  })
+}

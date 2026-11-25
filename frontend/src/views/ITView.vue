@@ -34,7 +34,8 @@ const caseId = computed(() => (route.params.id as string) || '')
 
 const SECTIONS = [
   ['health', 'Health'], ['repairs', 'Repairs'], ['controls', 'Controls'], ['incidents', 'Incidents'],
-  ['tickets', 'Tickets'], ['errors', 'Errors'], ['security', 'Security'], ['audit', 'Audit'], ['resources', 'Resources'],
+  ['tickets', 'Tickets'], ['errors', 'Errors'], ['security', 'Security'], ['email', 'Email'], ['audit', 'Audit'],
+  ['resources', 'Resources'],
 ] as const
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -76,6 +77,7 @@ async function load() {
     if (s === 'errors') data.value.errors = await api.get(`/it/errors?show=${errorFilter.value}`)
     if (s === 'security') data.value.security = await api.get(`/it/security?show=${securityFilter.value}`)
     if (s === 'audit') data.value.audit = await api.get('/it/audit')
+    if (s === 'email') data.value.email = await api.get('/it/email')
     if (s === 'resources') data.value.resources = await api.get('/it/resources')
   } catch (e) {
     fail(e, 'Could not load this section.')
@@ -211,6 +213,20 @@ async function review(id: string) {
     await load()
   } catch (e) {
     fail(e, 'Could not save the review.')
+  }
+}
+
+async function testEmail() {
+  busy.value = true
+  try {
+    const r = await api.post<{ ok: boolean; detail: string }>('/it/email/test')
+    if (r.ok) notice.value = r.detail
+    else error.value = r.detail
+    await load()
+  } catch (e) {
+    fail(e, 'The test email was not sent.')
+  } finally {
+    busy.value = false
   }
 }
 
@@ -529,6 +545,30 @@ onBeforeUnmount(() => window.clearInterval(timer))
               </form>
             </div>
             <button v-if="s.status === 'open' && reviewing !== s.id" class="btn-ghost btn-sm" @click="reviewing = s.id; reviewNote = ''">Review</button>
+          </li>
+        </ul>
+      </section>
+    </template>
+
+    <!-- ================= email ================= -->
+    <template v-if="section === 'email' && data.email">
+      <section class="card home-banner" :class="data.email.status.configured ? 'good' : 'warn'">
+        <span class="home-dot" :class="{ warn: !data.email.status.configured }" />
+        <div class="text">
+          <b>{{ data.email.status.configured ? `Email is set up (${data.email.status.mode})` : 'Email is not set up' }}</b>
+          <span v-if="data.email.status.configured && data.email.status.mode === 'smtp'">Sending through {{ data.email.status.host }} as {{ data.email.status.from }}.</span>
+          <span v-else-if="!data.email.status.configured">Run scripts\email-setup.ps1 on the server computer. Until then, codes and alerts stay inside the system.</span>
+        </div>
+        <button class="btn-outline" :disabled="busy || !data.email.status.configured" @click="testEmail">Send me a test email</button>
+      </section>
+      <section class="card">
+        <div class="card-head"><h3>Recent emails</h3><span class="muted small">Who, why and whether it went. Never the code or link.</span></div>
+        <p v-if="!data.email.messages.length" class="home-empty">Nothing sent yet.</p>
+        <ul class="home-list">
+          <li v-for="(m, k) in data.email.messages" :key="k">
+            <div><b>{{ m.subject }}</b> <span class="muted">· to {{ m.to }} · {{ clock(m.at) }}<template v-if="m.ms"> · {{ (m.ms / 1000).toFixed(1) }} s</template></span>
+              <p v-if="m.error" class="sub mono">{{ m.error }}</p></div>
+            <span class="pill" :class="m.status === 'sent' ? '' : m.status === 'skipped' ? 'neutral' : 'danger'">{{ m.status }}</span>
           </li>
         </ul>
       </section>

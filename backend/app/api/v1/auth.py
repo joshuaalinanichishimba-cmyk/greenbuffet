@@ -1,5 +1,6 @@
 """Sign in, sign out, who am I, and changing your own password."""
 from datetime import datetime, timedelta, timezone
+from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
@@ -8,14 +9,17 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.permissions import current_user
-from app.core.security import create_access_token, create_ticket, decode_token, hash_password, verify_password
-from app.models.access import LoginAttempt, Role, Setting, User, UserSession
+from app.core.security import (
+    create_access_token, create_ticket, decode_token, hash_password, password_problem, verify_password,
+)
+from app.models.access import EmailChallenge, LoginAttempt, Role, Setting, User, UserSession
+from app.services import email as mail
 from app.schemas.access import (
     CodeIn, LoginIn, LoginOut, LogoutIn, PasswordChangeIn, PasswordIn, TwoStepConfirmIn, TwoStepOffIn, UserOut,
 )
 from app.services import twostep
 from app.services.accounts import (
-    describe_device, end_sessions, notify, notify_owners, start_session, two_step_required,
+    describe_device, end_sessions, has_two_step, notify, notify_owners, start_session, two_step_required,
 )
 from app.services.audit import record
 
@@ -36,7 +40,9 @@ def _user_out(user: User, db: Session | None = None) -> UserOut:
         must_change_password=user.must_change_password,
         photo_id=user.photo_id,
         totp_enabled=user.totp_enabled,
-        two_step_required=bool(db and not user.totp_enabled and two_step_required(db, user)),
+        two_step_required=bool(db and not has_two_step(user) and two_step_required(db, user)),
+        email_verified=user.email_verified_at is not None,
+        two_step_method=user.two_step_method or ("app" if user.totp_enabled else ""),
     )
 
 
@@ -186,8 +192,30 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)) -> Log
     if user.totp_enabled:
         # Right password; now the code from the phone.
         return LoginOut(token="", expires_at="", user=_user_out(user, db), permissions=[],
-                        needs_code=True, ticket=create_ticket(user.id, user.token_version or 0))
+                        needs_code=True, code_by="app", ticket=create_ticket(user.id, user.token_version or 0))
+    if user.two_step_method == "email" and user.email_verified_at:
+        return _email_sign_in_code(db, user)
     return _signed_in(db, user, request)
+
+
+def _email_sign_in_code(db: Session, user: User) -> LoginOut:
+    """Right password; now a code by email. No session exists until it is entered."""
+    try:
+        challenge, code = mail.issue(db, user, "sign_in", user.email)
+        mail.send_code(db, user, "sign_in", user.email, code)
+    except mail.TooSoon as exc:
+        db.commit()
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(exc))
+    except mail.EmailNotSent as exc:
+        db.commit()
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            f"{exc} If you have recovery codes, ask IT to switch you to the app, "
+                            "or use reset-owner on the server computer.")
+    record(db, user.name, "security", "Sign-in code emailed", mail.mask(user.email))
+    db.commit()
+    return LoginOut(token="", expires_at="", user=_user_out(user, db), permissions=[], needs_code=True,
+                    code_by="email", sent_to=mail.mask(user.email),
+                    ticket=create_ticket(user.id, user.token_version or 0, challenge=challenge.id))
 
 
 @router.post("/login/code", response_model=LoginOut)
@@ -200,7 +228,20 @@ def login_code(body: CodeIn, request: Request, db: Session = Depends(get_db)) ->
     if not user or not user.is_active or payload.get("v", 0) != (user.token_version or 0):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Enter your password again.")
     _locked_out(db, user.email)
-    if twostep.check_code(user.totp_secret, body.code):
+    cid = payload.get("cid")
+    if cid:
+        challenge = db.get(EmailChallenge, cid)
+        if challenge and challenge.user_id != user.id:
+            challenge = None
+        try:
+            mail.check(db, challenge, body.code)
+            return _signed_in(db, user, request)
+        except mail.CodeProblem as exc:
+            if len(body.code.strip()) != 9:   # a recovery code is tried below
+                _failed(db, user.email, request, "email codes")
+                db.commit()
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc))
+    elif twostep.check_code(user.totp_secret, body.code):
         return _signed_in(db, user, request)
     remaining = twostep.use_recovery_code(user.recovery_codes, body.code)
     if remaining is not None:
@@ -295,6 +336,9 @@ def change_password(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Your current password is not correct.")
     if body.new_password == body.current_password:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose a password you have not used here before.")
+    weak = password_problem(body.new_password, user.email, user.name)
+    if weak:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, weak)
     user.password_hash = hash_password(body.new_password)
     user.must_change_password = False
     # Sessions on other devices end; this one gets a fresh token.
@@ -363,8 +407,9 @@ def new_recovery(body: PasswordIn, user: User = Depends(current_user), db: Sessi
 
 @router.post("/two-step/off")
 def two_step_off(body: TwoStepOffIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    if two_step_required(db, user):
-        raise HTTPException(status.HTTP_409_CONFLICT, "Owner accounts must keep two-step sign-in on.")
+    if two_step_required(db, user) and not (user.two_step_method == "email" and user.email_verified_at):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Owner and IT accounts must keep two-step sign-in on. "
+                            "Switch to email codes first if you want to stop using the app.")
     if not user.totp_enabled:
         return {"ok": True}
     if not verify_password(body.password, user.password_hash) or not twostep.check_code(user.totp_secret, body.code):
@@ -374,5 +419,237 @@ def two_step_off(body: TwoStepOffIn, user: User = Depends(current_user), db: Ses
     notify(db, [user], "security", "Two-step sign-in was turned off", "", "/profile/security", "warn", optional=False)
     notify_owners(db, "security_changed", f"{user.name} turned off two-step sign-in", "", f"/team/{user.id}",
                   level="warn", exclude=user.id)
+    db.commit()
+    return {"ok": True}
+
+
+
+# ---- email: sign-in code resend, confirming an address, changing it -----------
+
+class TicketIn(BaseModel):
+    ticket: str = Field(min_length=10, max_length=1000)
+
+
+@router.post("/login/resend", response_model=LoginOut)
+def resend_code(body: TicketIn, db: Session = Depends(get_db)) -> LoginOut:
+    """A new emailed code for the same sign-in. The old code stops working."""
+    payload = decode_token(body.ticket)
+    if not payload or payload.get("purpose") != "two_step" or not payload.get("cid"):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Enter your password again.")
+    user = db.get(User, payload.get("sub"))
+    if not user or not user.is_active or payload.get("v", 0) != (user.token_version or 0):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Enter your password again.")
+    _locked_out(db, user.email)
+    return _email_sign_in_code(db, user)
+
+
+class CodeOnlyIn(BaseModel):
+    code: str = Field(min_length=6, max_length=12)
+
+
+@router.post("/email/verify/start")
+def verify_start(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    if user.email_verified_at:
+        return {"verified": True}
+    try:
+        challenge, code = mail.issue(db, user, "verify", user.email)
+        mail.send_code(db, user, "verify", user.email, code)
+    except mail.TooSoon as exc:
+        db.commit()
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(exc))
+    except mail.EmailNotSent as exc:
+        db.commit()
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc))
+    db.commit()
+    return {"sent_to": mail.mask(user.email), "minutes": mail.CODE_MINUTES}
+
+
+@router.post("/email/verify/confirm")
+def verify_confirm(body: CodeOnlyIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    challenge = db.scalar(select(EmailChallenge).where(
+        EmailChallenge.user_id == user.id, EmailChallenge.purpose == "verify",
+        EmailChallenge.used_at.is_(None), EmailChallenge.cancelled_at.is_(None)))
+    try:
+        mail.check(db, challenge, body.code)
+    except mail.CodeProblem as exc:
+        db.commit()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    if challenge.email != user.email:
+        db.commit()
+        raise HTTPException(status.HTTP_409_CONFLICT, "Your email changed since the code was sent. Ask for a new one.")
+    user.email_verified_at = datetime.now(timezone.utc)
+    record(db, user.name, "security", "Email address confirmed", mail.mask(user.email))
+    db.commit()
+    return {"verified": True}
+
+
+class MethodIn(BaseModel):
+    method: str = Field(pattern="^(email|app)$")
+
+
+@router.post("/email/two-step")
+def choose_method(body: MethodIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Use emailed codes for the second step. An authenticator app, if set up,
+    keeps working too. Recovery codes are made if there are none yet, so a
+    day without email does not lock anyone out."""
+    import json
+    if body.method == "email":
+        if not user.email_verified_at:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Confirm your email address first.")
+        if not mail.configured():
+            raise HTTPException(status.HTTP_409_CONFLICT, "Email is not set up on this server yet. Ask IT.")
+    elif not user.totp_enabled:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Set up the authenticator app first.")
+    user.two_step_method = body.method
+    codes = []
+    if not json.loads(user.recovery_codes or "[]"):
+        codes, user.recovery_codes = twostep.new_recovery_codes()
+    record(db, user.name, "security", "Two-step method chosen", body.method)
+    notify(db, [user], "security", f"Two-step sign-in now uses {'email codes' if body.method == 'email' else 'the app'}",
+           "", "/profile/security", optional=False)
+    db.commit()
+    return {"method": user.two_step_method, "recovery_codes": codes}
+
+
+class EmailChangeIn(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+    new_email: str = Field(min_length=5, max_length=160)
+
+
+@router.post("/email/change/start")
+def change_email_start(body: EmailChangeIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Step one: password again, then a code to the new address and, if the
+    current one is confirmed, a code to that too. Nothing changes until both
+    are entered."""
+    new_email = body.new_email.strip().lower()
+    if "@" not in new_email or "." not in new_email.split("@")[-1] or " " in new_email:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That is not an email address.")
+    if not verify_password(body.password, user.password_hash):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That password is not right.")
+    if new_email == user.email:
+        raise HTTPException(status.HTTP_409_CONFLICT, "That is already your email address.")
+    if db.scalar(select(User.id).where(User.email == new_email)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That email already has an account.")
+    group = __import__("uuid").uuid4().hex
+    try:
+        needs_old = user.email_verified_at is not None
+        if needs_old:
+            _, old_code = mail.issue(db, user, "change_old", user.email, group_id=group)
+            mail.send_code(db, user, "change_old", user.email, old_code)
+        _, new_code = mail.issue(db, user, "change_new", new_email, group_id=group)
+        mail.send_code(db, user, "change_new", new_email, new_code)
+    except mail.TooSoon as exc:
+        db.commit()
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(exc))
+    except mail.EmailNotSent as exc:
+        db.commit()
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc))
+    record(db, user.name, "security", "Email change started", f"{mail.mask(user.email)} to {mail.mask(new_email)}")
+    db.commit()
+    return {"group": group, "needs_old": needs_old, "old": mail.mask(user.email), "new": mail.mask(new_email)}
+
+
+class EmailChangeConfirmIn(BaseModel):
+    group: str = Field(min_length=10, max_length=40)
+    new_code: str = Field(min_length=6, max_length=12)
+    old_code: str = Field(default="", max_length=12)
+
+
+@router.post("/email/change/confirm")
+def change_email_confirm(body: EmailChangeConfirmIn, request: Request, user: User = Depends(current_user),
+                         db: Session = Depends(get_db)) -> dict:
+    found = {c.purpose: c for c in db.scalars(select(EmailChallenge).where(
+        EmailChallenge.user_id == user.id, EmailChallenge.group_id == body.group)).all()}
+    new = found.get("change_new")
+    if not new:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Start the change again.")
+    try:
+        if "change_old" in found:
+            mail.check(db, found["change_old"], body.old_code)
+        mail.check(db, new, body.new_code)
+    except mail.CodeProblem as exc:
+        db.commit()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    if db.scalar(select(User.id).where(User.email == new.email, User.id != user.id)):
+        db.commit()
+        raise HTTPException(status.HTTP_409_CONFLICT, "That email has just been taken by another account.")
+    old_email = user.email
+    # Tell the old address first, so a takeover is noticed even if it worked.
+    mail.send_alert(db, user, "Your Green Buffet email address was changed", f"It is now {mail.mask(new.email)}.")
+    user.email = new.email
+    user.email_verified_at = datetime.now(timezone.utc)
+    mail.cancel_all(db, user)
+    db.query(LoginAttempt).filter(LoginAttempt.email == new.email).delete()
+    ended = end_sessions(db, user, "password", user.name, keep=getattr(request.state, "session_id", None))
+    mail.send_alert(db, user, "This is now your Green Buffet email address", f"It replaced {mail.mask(old_email)}.")
+    record(db, user.name, "security", "Email address changed", f"{mail.mask(old_email)} to {mail.mask(new.email)}; "
+           f"{ended} other device(s) signed out", user.id, before={"email": mail.mask(old_email)},
+           after={"email": mail.mask(new.email)})
+    notify_owners(db, "security_changed", f"{user.name} changed their email address", "", f"/team/{user.id}",
+                  exclude=user.id)
+    db.commit()
+    return {"email": user.email}
+
+
+# ---- forgotten passwords ------------------------------------------------------------
+
+class ForgotIn(BaseModel):
+    email: str = Field(min_length=3, max_length=160)
+
+
+@router.post("/password/forgot")
+def forgot(body: ForgotIn, request: Request, db: Session = Depends(get_db)) -> dict:
+    """Always the same answer, so it cannot be used to find out who has an
+    account. A link goes only to a confirmed address of an active account."""
+    email = body.email.strip().lower()
+    answer = {"message": "If that address belongs to an account with a confirmed email, a reset link is on its way. "
+                         "It works for 30 minutes. If nothing arrives, ask an owner or manager."}
+    user = db.scalar(select(User).where(User.email == email))
+    from app.services.ops import security_event
+    security_event(db, "password_reset_asked", "low", "Reset link requested", account=email,
+                   ip=request.client.host if request.client else "", path=request.url.path, every_seconds=60)
+    if user and user.is_active and user.email_verified_at:
+        try:
+            _, token = mail.issue(db, user, "reset", user.email, link=True)
+            mail.send_reset(db, user, token)
+            record(db, "System", "security", "Password reset link sent", mail.mask(email), user.id)
+        except (mail.TooSoon, mail.EmailNotSent):
+            pass
+    db.commit()
+    return answer
+
+
+class ResetIn(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+    new_password: str = Field(min_length=1, max_length=100)
+
+
+@router.post("/password/reset")
+def reset(body: ResetIn, db: Session = Depends(get_db)) -> dict:
+    challenge = mail.find_link(db, body.token)
+    user = db.get(User, challenge.user_id) if challenge else None
+    if not user or not user.is_active:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That link is not valid. Ask for a new one.")
+    weak = password_problem(body.new_password, user.email, user.name)
+    if weak:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, weak)
+    try:
+        mail.check(db, challenge, body.token)
+    except mail.CodeProblem as exc:
+        db.commit()
+        msg = str(exc).replace("code", "link")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, msg)
+    user.password_hash = hash_password(body.new_password)
+    user.must_change_password = False
+    user.token_version = (user.token_version or 0) + 1
+    end_sessions(db, user, "password", "password reset")
+    mail.cancel_all(db, user)
+    db.query(LoginAttempt).filter(LoginAttempt.email == user.email, LoginAttempt.succeeded.is_(False)).delete()
+    record(db, user.name, "security", "Password reset by email link", mail.mask(user.email), user.id)
+    notify(db, [user], "security", "Your password was reset", "Every device was signed out.", "/profile/security",
+           "warn", optional=False)
+    if user.role_id in ("owner", "it"):
+        notify_owners(db, "security_changed", f"{user.name} reset their password by email", "", f"/team/{user.id}",
+                      exclude=user.id)
     db.commit()
     return {"ok": True}

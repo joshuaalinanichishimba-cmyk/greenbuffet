@@ -90,6 +90,31 @@ onMounted(async () => {
 
 // Two-step sign-in: after the password, the six-digit code from the phone.
 const ticket = ref('')
+// How the second step is done: the authenticator app, or a code by email.
+const codeBy = ref<'app' | 'email'>('app')
+const sentTo = ref('')
+const resendIn = ref(0)
+let resendTimer: number | undefined
+function startResendClock() {
+  resendIn.value = 60
+  window.clearInterval(resendTimer)
+  resendTimer = window.setInterval(() => {
+    resendIn.value = Math.max(0, resendIn.value - 1)
+    if (!resendIn.value) window.clearInterval(resendTimer)
+  }, 1000)
+}
+async function resend() {
+  error.value = ''
+  try {
+    const r = await api.post<{ ticket: string; sent_to: string }>('/auth/login/resend', { ticket: ticket.value })
+    ticket.value = r.ticket
+    sentTo.value = r.sent_to
+    code.value = ''
+    startResendClock()
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : 'Could not send a new code.'
+  }
+}
 const code = ref('')
 const codeBox = ref<HTMLInputElement | null>(null)
 
@@ -122,6 +147,9 @@ async function submit() {
     const result = await session.signIn(email.value, password.value, roleId.value || undefined)
     if (result.needs_code) {
       ticket.value = result.ticket ?? ''
+      codeBy.value = (result as { code_by?: string }).code_by === 'email' ? 'email' : 'app'
+      sentTo.value = (result as { sent_to?: string }).sent_to ?? ''
+      if (codeBy.value === 'email') startResendClock()
       code.value = ''
       busy.value = false
       await nextTick()
@@ -160,10 +188,15 @@ async function submit() {
 
       <template v-if="ticket">
         <p class="as">Two-step sign-in for <b>{{ email }}</b></p>
-        <label for="code">Code from your authenticator app</label>
+        <p v-if="codeBy === 'email'" class="hint">We emailed a six-digit code to <b>{{ sentTo }}</b>. It works for 5 minutes.
+          Nobody at the restaurant will ever ask you for it.</p>
+        <label for="code">{{ codeBy === 'email' ? 'Code from the email' : 'Code from your authenticator app' }}</label>
         <input id="code" ref="codeBox" v-model="code" inputmode="numeric" autocomplete="one-time-code"
                maxlength="9" placeholder="123456" required class="code" />
-        <p class="hint">Lost your phone? Type one of your recovery codes instead.</p>
+        <p class="hint">{{ codeBy === 'email' ? 'No email? Check spam, or type one of your recovery codes.' : 'Lost your phone? Type one of your recovery codes instead.' }}</p>
+        <button v-if="codeBy === 'email'" type="button" class="change" :disabled="resendIn > 0" @click="resend">
+          {{ resendIn > 0 ? `Send a new code in ${resendIn} s` : 'Send a new code' }}
+        </button>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <button class="go" :disabled="busy || code.trim().length < 6">{{ busy ? 'Checking…' : 'Sign in' }}</button>
         <button type="button" class="change" @click="ticket = ''; code = ''; error = ''">Back</button>
@@ -180,6 +213,7 @@ async function submit() {
       <button class="go" :disabled="busy">
         {{ busy ? 'Signing in…' : chosen ? `Sign in as ${chosen.label}` : 'Sign in' }}
       </button>
+      <RouterLink to="/forgot-password" class="forgot">Forgot your password?</RouterLink>
       </template>
 
       <template v-if="roles.length && !ticket">
@@ -219,7 +253,7 @@ async function submit() {
       </template>
 
       <p class="hint">
-        Trouble signing in? Ask the owner or an administrator to reset your account.
+        Trouble signing in? Use "Forgot your password?", or ask an owner or manager.
       </p>
     </form>
   </div>
@@ -289,4 +323,5 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 1rem 0 .4rem; width: 
 .error { background: color-mix(in srgb, var(--danger) 12%, var(--paper)); color: var(--danger); padding: 0.6rem 0.8rem; border-radius: 10px; font-size: 0.92rem; margin: 0; }
 .hint { font-size: 0.85rem; color: var(--muted); margin: 0.3rem 0 0; }
 .code { letter-spacing: .3em; font-weight: 800; font-size: 1.3rem; text-align: center; }
+.forgot { display: block; text-align: center; margin-top: .6rem; font-size: .9rem; color: var(--green-deep); font-weight: 700; }
 </style>

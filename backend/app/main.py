@@ -207,9 +207,16 @@ if BUILT.is_dir():
         if path.startswith("api/"):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "There is no such endpoint.")
         candidate = (BUILT / path).resolve()
+        # The page and the service worker must always be checked with the
+        # server, or a computer could keep running last week's version.
+        fresh = {"Cache-Control": "no-cache"}
         if path and candidate.is_file() and candidate.is_relative_to(BUILT.resolve()):
+            if path == "sw.js":
+                return FileResponse(candidate, media_type="text/javascript", headers=fresh)
+            if path.endswith(".webmanifest"):
+                return FileResponse(candidate, media_type="application/manifest+json", headers=fresh)
             return FileResponse(candidate)
-        return FileResponse(BUILT / "index.html")
+        return FileResponse(BUILT / "index.html", headers=fresh)
 
 
 @app.get("/")

@@ -35,7 +35,7 @@ def make_user(owner, role):
     assert r.status_code in (200, 201), r.text
     temp = r.json()["temporary_password"]
     token = login(email, temp)
-    new_password = "Test-" + uuid.uuid4().hex[:10]
+    new_password = "Kp-" + uuid.uuid4().hex[:12]
     r = api("POST", "/auth/change-password", token, json={"current_password": temp, "new_password": new_password})
     assert r.status_code == 200, r.text
     return {"email": email, "password": new_password, "token": r.json()["token"], "id": r.json().get("id")}

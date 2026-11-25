@@ -1,5 +1,27 @@
 # Test report
 
+## Stage 27, 25 November 2026 (installable app and offline cash sales)
+
+| Suite | Result |
+|---|---|
+| `tests/test_offline.py` (see `STAGE-27-REPORT.md`) | 12 passed |
+| `test_money_flows`, `test_security`, `test_profiles`, `test_it`, `test_email` | 103 passed |
+| `tests/probe_customer_security.py` | 29 passed |
+| Browser, server switched off and on: offline reload, sale, sending once, till back to normal | 11 / 11 |
+| Screen sweep: 57 screens × phone and desktop × light and dark | 228 / 228 clean |
+
+## Stage 25, 25 November 2026 (email)
+
+Run against a test copy of the database with email written to files instead of sent. Your live data was not touched.
+
+| Suite | Result |
+|---|---|
+| `tests/test_email.py` (see `STAGE-25-REPORT.md` for the list) | 17 passed |
+| `tests/test_money_flows.py`, `tests/test_security.py`, `tests/test_profiles.py`, `tests/test_it.py` | 86 passed |
+| `tests/probe_customer_security.py` | 29 passed |
+| Browser: forgotten password and reset link, emailed code sign-in | Pass |
+| Screen sweep: 57 screens × phone and desktop × light and dark | 228 / 228 clean |
+
 ## Stage 23, 24 November 2026 (profiles, presence, security)
 
 Run against a test copy of the database. Your live data was not touched.

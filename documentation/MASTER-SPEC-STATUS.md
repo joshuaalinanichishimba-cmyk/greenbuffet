@@ -38,11 +38,11 @@ owners. Nothing in that column was bought or switched on.
 | 10 | Six account types | **Done (stage 24)** | Owner ×2, Manager, Cashier, Kitchen, Accountant, **IT administrator** (new) |
 | 11 | Two-owner control | Done | Equal owners; neither can suspend, demote or archive the other. Dual approval for exceptional actions: planned (25) |
 | 12 | Granular permissions | Done | 60+ permissions, checked on the server for every request |
-| 13 | Secure authentication | Partly | Argon2id, lockout, rate limiting (stage 24), sessions, lock screen. Email verification and recovery by email: stage 25 |
-| 14 | Email two-factor codes | Planned (25) / **Needs you** | Authenticator-app two-step already works and is required for owners and IT. Email codes need an email provider |
-| 15 | Transactional email | **Needs you** | Recommend Resend or Brevo; free tiers exist. Needs an account, a domain and its DNS records |
-| 16 | Secure email change | Planned (25) | Needs email |
-| 17 | Recovery | Partly | Recovery codes, reset by owner, reset-owner script. Email reset links: 25 |
+| 13 | Secure authentication | Done | Argon2id, lockout, rate limiting (stage 24), sessions, lock screen. Email verification and recovery by email (stage 25) |
+| 14 | Email two-factor codes | Done (25) | Six digits, 5 minutes, once, five tries, resend after 60 s, stored only as a keyed fingerprint. Owners and IT choose email or authenticator app |
+| 15 | Transactional email | Done (25), Gmail for now | SMTP. Sends from Joshua's Gmail with an App Password (`email-setup.ps1`). For the restaurant's own domain later: Resend or Brevo SMTP and DNS records |
+| 16 | Secure email change | Done (25) | Codes to both old and new; both told; other devices signed out; owners' addresses cannot be changed by anyone else |
+| 17 | Recovery | Done | Recovery codes, reset by owner, reset-owner script, email reset links (30 minutes, once, ends every session) |
 | 18–19 | Attack protection | **Partly (stage 24)** | Parameterised queries (ORM), validation, CSP, HSTS, frame, referrer, rate limits. Threat model and outside test: 29 |
 | 20 | Security centre | **Done (stage 24)** | IT workspace → Security: failed and locked sign-ins, refusals, rate limits, with review notes |
 | 21 | Sessions and devices | Done | Per-device sessions, revoke one or all, inactivity lock |
@@ -54,10 +54,10 @@ owners. Nothing in that column was bought or switched on.
 
 | § | Subject | Status | Notes |
 |---|---|---|---|
-| 25–28 | Installable app, caching, updates | Planned (27) | Manifest, icons, service worker, update at a safe moment |
-| 29 | Push notifications | Planned (27) | In-system notices already work (stage 23) |
-| 82–84 | Offline cash sales | Planned (27) | IndexedDB queue, idempotent sync, short offline authorisation |
-| 85 | Kitchen during outages | Planned (27) | Printed ticket fallback |
+| 25–28 | Installable app, caching, updates | Done (27) | Manifest, icons, service worker keeps every screen; the page is always checked first, so updates show on the next open with the connection up; the API is never cached |
+| 29 | Push notifications | Moved to 29 | Needs https and a push service. In-system and email notices work |
+| 82–84 | Offline cash sales | Done (27) | IndexedDB queue, saved before the receipt; one id one sale (unique index); server re-prices and dates to the sale; price gaps and late arrivals told to owners; works for whoever was signed in, signing in fresh needs the server |
+| 85 | Kitchen during outages | Done (27) | Printed receipt is the ticket; recent offline sales reach the board on sending, older ones are recorded as served |
 
 ## Selling and payments (30–37)
 
@@ -115,8 +115,8 @@ owners. Nothing in that column was bought or switched on.
 | 64 | Self-healing | Partly | Database reconnects; failed requests are logged. Job retries come with background jobs (26) |
 | 65 | Database integrity | **Done (stage 24)** | Nine checks, four with repairs |
 | 66 | Lenco technical | Planned (26) | |
-| 67 | Email technical | Planned (25) | |
-| 68–70 | PWA, devices, sync centre | Planned (27) | Devices and sessions are already listed per person |
+| 67 | Email technical | Done (25) | Email log without bodies, codes or links; IT status and test; failures with reasons |
+| 68–70 | PWA, devices, sync centre | Done (27) | Waiting and refused offline sales shown on the till and in the top bar; devices and sessions listed per person |
 | 71 | Deployments | **Needs you** | Needs provider API keys |
 | 72–73 | Configuration, feature flags, emergency | **Done (stage 24)** | Cash-only, stop orders, read-only; password and reason; owners told |
 | 74 | Error log | **Done (stage 24)** | Grouped, counted, cleaned of secrets, with reference numbers. Sentry: optional, needs an account |
@@ -137,7 +137,7 @@ owners. Nothing in that column was bought or switched on.
 | 88 | File storage | **Needs you** | Local disk today. Cloud needs S3-compatible storage (Cloudflare R2 has a free tier) |
 | 89 | Backups and recovery | Partly | Backup before updates, restore test. Off-site copies: needs storage |
 | 90 | Independent monitoring | **Needs you** | A free uptime monitor (UptimeRobot, Better Stack) pointed at `/api/v1/health` |
-| 91 | Notifications | Partly | In-system. Email and push: 25 and 27 |
+| 91 | Notifications | Partly | In-system and email (25). Push: 27 |
 | 92 | Food safety, equipment | Planned (28) | |
 | 93 | Hardware conditions | Partly | Works on low-end PCs and phones; printer tested in the browser |
 | 94–95 | UI, performance | Ongoing | Every screen checked at phone and desktop width, light and dark |
@@ -152,8 +152,8 @@ owners. Nothing in that column was bought or switched on.
 
 | Stage | Content | Needs from you |
 |---|---|---|
-| 25 | Email: verified addresses, email codes, reset links, email change; approval thresholds and dual approval; owner security summary | An email provider account (free tier is enough to start) and a domain |
+| 25 | Email | Built. Switched on last, before go-live: a Google App Password typed into `email-setup.ps1` |
 | 26 | Lenco: payments, webhooks, re-checks, settlement and fees, background jobs | Lenco merchant account and **sandbox** keys |
-| 27 | Installable app and offline cash sales | Nothing |
-| 28 | Expenses, waste, expiry, checklists, food safety, equipment, accounting periods, rotas, payroll extras | Nothing |
+| 27 | Installable app and offline cash sales | Done |
+| 28 | Expenses, waste, expiry, checklists, food safety, equipment, accounting periods, rotas, payroll extras, approval thresholds, dual approval, owner security summary | Nothing |
 | 29 | Vercel + Render production, CI, monitoring, storage, recovery, go-live checklist, costs | Accounts, domain, approval to pay |

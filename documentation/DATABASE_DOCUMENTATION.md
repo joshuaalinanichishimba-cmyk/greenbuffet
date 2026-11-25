@@ -1,6 +1,6 @@
 # Database documentation
 
-Generated from the models on 24 November 2026: 52 tables. Money columns end in `_ngwee` (whole ngwee). Stock quantities end in `_milli` (thousandths of the ingredient's unit). Times are stored in UTC and shown in Africa/Lusaka time.
+Generated from the models on 24 November 2026: 54 tables. Money columns end in `_ngwee` (whole ngwee). Stock quantities end in `_milli` (thousandths of the ingredient's unit). Times are stored in UTC and shown in Africa/Lusaka time.
 
 The delivery, catering and messages tables and columns were removed in stage 22, after a backup.
 
@@ -128,6 +128,36 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | is_primary | boolean | no |  |
 | created_at | timestamp with time zone | no |  |
 | created_by | varchar(80) | yes |  |
+
+## email_challenges
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| id | varchar(32) | no | primary key |
+| user_id | varchar(32) | no | → users.id |
+| purpose | varchar(12) | no |  |
+| email | varchar(160) | no |  |
+| code_hash | varchar(64) | no |  |
+| created_at | timestamp with time zone | no |  |
+| expires_at | timestamp with time zone | no |  |
+| attempts | integer | no |  |
+| used_at | timestamp with time zone | yes |  |
+| cancelled_at | timestamp with time zone | yes |  |
+| group_id | varchar(32) | no |  |
+
+## email_messages
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| id | varchar(32) | no | primary key |
+| at | timestamp with time zone | no |  |
+| to | varchar(160) | no |  |
+| purpose | varchar(20) | no |  |
+| subject | varchar(160) | no |  |
+| status | varchar(10) | no |  |
+| error | varchar(300) | no |  |
+| provider | varchar(20) | no |  |
+| ms | integer | no |  |
 
 ## employees
 
@@ -420,6 +450,9 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | total_ngwee | integer | no |  |
 | vat_ngwee | integer | no |  |
 | paid_at | timestamp with time zone | yes |  |
+| offline_id | varchar(36) | yes |  |
+| offline_taken_at | timestamp with time zone | yes |  |
+| offline_synced_at | timestamp with time zone | yes |  |
 | cancelled_at | timestamp with time zone | yes |  |
 | cancelled_by | varchar(80) | yes |  |
 | cancel_reason | varchar(300) | no |  |
@@ -807,5 +840,7 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | totp_secret | varchar(64) | no |  |
 | totp_enabled | boolean | no |  |
 | recovery_codes | text | no |  |
+| email_verified_at | timestamp with time zone | yes |  |
+| two_step_method | varchar(10) | no |  |
 | created_at | timestamp with time zone | no |  |
 | created_by | varchar(80) | yes |  |

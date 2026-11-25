@@ -22,9 +22,17 @@ import AccountMenu from './AccountMenu.vue'
 import Avatar from './Avatar.vue'
 import logoMark from '../assets/logo-mark.png'
 import { homeFor, type HomeKind } from '../services/home'
+import { reachable, syncing, waiting } from '../services/offline'
 import { THEME_LABELS, applyTheme, nextTheme, savedTheme, type ThemeChoice } from '../services/theme'
 
 const router = useRouter()
+
+// Offline sales on this device: this person's, and anyone else's still
+// waiting for them to sign in.
+const mineWaiting = computed(() => waiting.value.filter((s) => s.user_id === session.user.value?.id && s.state === 'waiting').length)
+const mineProblems = computed(() => waiting.value.filter((s) => s.user_id === session.user.value?.id && s.state === 'problem').length)
+const othersWaiting = computed(() => waiting.value.filter((s) => s.user_id !== session.user.value?.id).length)
+const down = computed(() => !session.connected.value || !reachable.value)
 const can = (...codes: string[]) => session.canAny(...codes)
 
 // The first link is each account's own home, named for what it holds.
@@ -230,9 +238,15 @@ async function signOut() {
         <AccountMenu class="acct-slot" />
       </header>
 
-      <p v-if="!session.connected.value" class="offline" role="status">
-        Connection to the server lost (network or power). Reconnecting… What is on screen is kept;
-        nothing is sent twice.
+      <p v-if="down" class="offline" role="status">
+        No connection to the server. Reconnecting…
+        <template v-if="can('pos.use')"> The till keeps taking <b>cash</b> sales on this device<template v-if="mineWaiting">; {{ mineWaiting }} waiting to send</template>.</template>
+        <template v-else> What is on screen is kept; nothing is sent twice.</template>
+      </p>
+      <p v-else-if="mineWaiting || mineProblems || othersWaiting" class="offline queued" role="status">
+        <template v-if="mineWaiting">{{ syncing ? 'Sending' : 'Waiting to send' }} {{ mineWaiting }} offline sale{{ mineWaiting === 1 ? '' : 's' }}. </template>
+        <template v-if="mineProblems">{{ mineProblems }} offline sale{{ mineProblems === 1 ? '' : 's' }} need{{ mineProblems === 1 ? 's' : '' }} a manager: <RouterLink to="/till">see the till</RouterLink>. </template>
+        <template v-if="othersWaiting">{{ othersWaiting }} from someone else, sent when they next sign in on this device.</template>
       </p>
 
       <p v-if="minutesLeft !== null && minutesLeft <= 15" class="expiry">
@@ -328,6 +342,8 @@ nav section { display: grid; gap: .15rem; }
 }
 .live { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 25%, transparent); }
 .offline { margin: 0; padding: .55rem 2rem; background: var(--warn-soft); color: var(--warn); font-size: .88rem; font-weight: 700; }
+.offline.queued { background: var(--panel); color: var(--ink); border-bottom: 1px solid var(--line); font-weight: 600; }
+.offline a { color: inherit; }
 .me-link { display: inline-flex; border-radius: 50%; }
 .expiry { margin: 0; padding: .55rem 2rem; background: var(--warn-soft); color: var(--warn); font-size: .88rem; }
 

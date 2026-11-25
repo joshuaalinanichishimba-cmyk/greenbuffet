@@ -41,7 +41,7 @@ def make_user(owner, role):
     assert r.status_code in (200, 201), r.text
     temp = r.json()["temporary_password"]
     token = login(email, temp)
-    password = "Test-" + uuid.uuid4().hex[:10]
+    password = "Kp-" + uuid.uuid4().hex[:12]
     r = api("POST", "/auth/change-password", token, json={"current_password": temp, "new_password": password})
     return {"id": r.json().get("id") or "", "email": email, "password": password, "token": r.json()["token"]}
 
@@ -86,7 +86,11 @@ def test_it_sees_health_but_not_money_or_people(it):
 def test_overview_never_claims_unchecked_things_are_fine(it):
     checks = {c["key"]: c for c in api("GET", "/it/overview", it["token"]).json()["checks"]}
     assert checks["database"]["status"] == "operational" and "ms" in checks["database"]["detail"]
-    assert checks["email"]["status"] == "not_configured"
+    # Email may be set up on the test server; it is only "operational" once
+    # something was really sent, and the detail says how much.
+    assert checks["email"]["status"] in ("not_configured", "unknown", "operational", "degraded", "critical")
+    if checks["email"]["status"] == "operational":
+        assert "sent" in checks["email"]["detail"]
     assert checks["lenco"]["status"] == "not_configured"
 
 

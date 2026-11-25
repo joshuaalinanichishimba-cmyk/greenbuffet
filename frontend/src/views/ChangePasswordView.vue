@@ -25,8 +25,8 @@ async function submit() {
     error.value = 'The two new passwords do not match.'
     return
   }
-  if (next.value.length < 8) {
-    error.value = 'Use at least 8 characters.'
+  if (next.value.length < 10) {
+    error.value = 'Use at least 10 characters.'
     return
   }
   busy.value = true
@@ -64,7 +64,7 @@ async function submit() {
       <input id="con" v-model="confirm" type="password" autocomplete="new-password" required />
 
       <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <p class="hint">At least 8 characters. Something you will remember, not your name.</p>
+      <p class="hint">At least 10 characters. A short sentence you will remember works well; not your name or email.</p>
       <button :disabled="busy">{{ busy ? 'Saving…' : 'Save password' }}</button>
     </form>
   </div>

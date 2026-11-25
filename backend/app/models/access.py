@@ -86,6 +86,12 @@ class User(Base, TimestampMixin):
     totp_secret: Mapped[str] = mapped_column(String(64), default="", nullable=False)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     recovery_codes: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    # Email (stage 25). An address only receives sign-in codes and reset links
+    # once its owner has proved they read it.
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # "app" or "email": how the second step is done. An authenticator app, if
+    # set up, is always accepted as well.
+    two_step_method: Mapped[str] = mapped_column(String(10), default="", nullable=False)
 
     role: Mapped[Role] = relationship(back_populates="users", lazy="selectin")
 
@@ -181,3 +187,46 @@ class Setting(Base):
     key: Mapped[str] = mapped_column(String(60), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
     label: Mapped[str] = mapped_column(String(120), default="")
+
+
+class EmailChallenge(Base):
+    """A one-time code or link sent by email: to sign in, to prove an address,
+    to change it, or to reset a password.
+
+    Only a keyed hash of the code is kept. A challenge works once, for a few
+    minutes, for a few tries, and a new one for the same purpose cancels the
+    old.
+    """
+
+    __tablename__ = "email_challenges"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    # sign_in, verify, change_old, change_new, reset
+    purpose: Mapped[str] = mapped_column(String(12), nullable=False)
+    email: Mapped[str] = mapped_column(String(160), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Links the old-address and new-address codes of one email change.
+    group_id: Mapped[str] = mapped_column(String(32), default="", nullable=False)
+
+
+class EmailMessage(Base):
+    """Every email the system tried to send: to whom, why, and whether it
+    went. Never the body, so no code or link is ever kept here."""
+
+    __tablename__ = "email_messages"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    to: Mapped[str] = mapped_column(String(160), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(20), nullable=False)
+    subject: Mapped[str] = mapped_column(String(160), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), nullable=False)   # sent, failed, skipped
+    error: Mapped[str] = mapped_column(String(300), default="", nullable=False)
+    provider: Mapped[str] = mapped_column(String(20), default="", nullable=False)
+    ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -232,8 +232,9 @@ in your till basket waits for you. The kitchen display never locks itself.
 
 ## Two-step sign-in for the owners
 
-Owner accounts must use a code from an authenticator app on the phone
-(Google Authenticator, Microsoft Authenticator or Authy). After test mode is
+Owner accounts must use two-step sign-in: a code from an authenticator app on
+the phone (Google Authenticator, Microsoft Authenticator or Authy), or, once
+email is set up, a code sent by email. After test mode is
 switched off, each owner is asked to set it up at their next sign-in:
 1. Scan the QR code with the app.
 2. Type the code the app shows.
@@ -241,6 +242,36 @@ switched off, each owner is asked to set it up at their next sign-in:
 
 If an owner loses their phone, they sign in with a recovery code. If those are
 lost too, run `.\scripts\reset-owner.ps1` on the server computer.
+
+## Email (stage 25)
+
+Once `email-setup.ps1` has been run (see `STAGE-25-REPORT.md`), each person
+confirms their address under Profile → Security. After that:
+
+- **Forgot your password?** on the sign-in screen sends a link that works for
+  30 minutes. Only confirmed addresses get one.
+- Owners and IT can choose **email code** instead of the authenticator app for
+  two-step sign-in. Keep the recovery codes either way.
+- Changing an address needs a code from the old address and the new one.
+  Nobody can change an owner's address except that owner.
+- Important security notices also arrive by email.
+
+Change the two owner accounts from the starter addresses to real ones first.
+
+## Offline sales (stage 27)
+
+When the till cannot reach the server it keeps taking cash and sends the
+sales when the connection is back (see `STAGE-27-REPORT.md`). You are told
+when one arrives at a different price from today's menu, or after its till
+was closed. A sale the server refuses stays on that device under "Offline
+sales the server could not take": enter it by hand, then press **Entered by
+hand, set aside**.
+
+Each counter device needs to open the till once a day with the connection up,
+so it has the day's menu and prices.
+
+To install the system as an app on the counter computer, open it in Chrome
+or Edge and use the install icon in the address bar.
 
 ## Notices
 

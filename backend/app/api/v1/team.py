@@ -34,7 +34,7 @@ from app.models.people import Attendance, Employee, LeaveRequest, Payslip
 from app.models.sales import CashMovement, Order, Payment, Shift
 from app.models.stock import StockMove
 from app.services.accounts import (
-    OPTIONAL_KINDS, end_sessions, notify, notify_owners, now, presence, session_out, setting_int,
+    OPTIONAL_KINDS, end_sessions, has_two_step, notify, notify_owners, now, presence, session_out, setting_int,
     two_step_required,
 )
 from app.services.audit import record
@@ -273,7 +273,9 @@ def _profile(db: Session, viewer: User, t: User) -> dict:
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "created_by": t.created_by or "",
         "responsibilities": _responsibilities(t),
-        "two_step": {"enabled": t.totp_enabled, "required": two_step_required(db, t)},
+        "two_step": {"enabled": has_two_step(t), "app": t.totp_enabled, "method": t.two_step_method or ("app" if t.totp_enabled else ""),
+                     "required": two_step_required(db, t)},
+        "email_verified": t.email_verified_at is not None,
         "tabs": _tabs(viewer, t),
         "can": _actions(db, viewer, t),
         "is_me": me,

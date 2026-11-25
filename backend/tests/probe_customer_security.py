@@ -61,8 +61,8 @@ def main():
     cashier = sign_in(email, temporary)
     if cashier:
         call("POST", "/auth/change-password", token=cashier,
-             json={"current_password": temporary, "new_password": "ProbeCashier#2026"})
-        cashier = sign_in(email, "ProbeCashier#2026")
+             json={"current_password": temporary, "new_password": "Counter-Shift#2026"})
+        cashier = sign_in(email, "Counter-Shift#2026")
     check("the cashier can sign in", bool(cashier))
 
     print("\n== What a cashier may do")

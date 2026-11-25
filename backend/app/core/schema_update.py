@@ -164,6 +164,21 @@ CREATE TRIGGER audit_log_append_only BEFORE UPDATE OR DELETE ON audit_log
 """
 
 
+UNIQUE_INDEXES = [
+    # One offline sale id is one sale, even if two requests race each other.
+    'CREATE UNIQUE INDEX IF NOT EXISTS orders_offline_id_once ON orders (offline_id) WHERE offline_id IS NOT NULL',
+]
+
+
+def ensure_unique_indexes(engine: Engine) -> None:
+    """Adds the unique rules that add_missing_columns cannot add on its own."""
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.begin() as conn:
+        for statement in UNIQUE_INDEXES:
+            conn.exec_driver_sql(statement)
+
+
 def protect_audit_log(engine: Engine) -> None:
     """Makes the audit log append-only inside PostgreSQL itself.
 

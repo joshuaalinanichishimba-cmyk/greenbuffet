@@ -10,6 +10,10 @@ import { fileUrl } from '../services/files'
 import { kwacha, toNgwee } from '../services/money'
 import { session } from '../stores/session'
 import ManagerApproval from '../components/ManagerApproval.vue'
+import {
+  keepMenu, keepReady, keepReceiptHeader, keptMenu, keptReady, keptReceiptHeader, reachable, sent,
+  setAside, syncNow, takeOfflineSale, tryAgain, waiting, type OfflineSale,
+} from '../services/offline'
 
 type CartLine = {
   product: MenuProduct
@@ -239,13 +243,119 @@ async function load() {
     shift.value = s
     categories.value = c
     products.value = p
+    offline.value = false
     loadPhotos().catch(() => undefined)
+    // Kept on this device for the moment the network drops.
+    keepMenu(c, p)
+    api.get<{ shift_id: string | null; user_id: string; user_name: string }>('/sales/offline/ready')
+      .then((r) => keepReady(r)).catch(() => undefined)
   } catch (e) {
+    if (e instanceof ApiError && e.status === 0 && (await startOfflineTill())) return
     error.value = e instanceof ApiError ? e.message : 'Could not load the till.'
   } finally {
     loading.value = false
   }
 }
+// ---- selling with the server out of reach ---------------------------------
+// The menu and this person's open till come from the last time the till
+// loaded. Cash only, at the prices on screen; no discounts, codes or stamp
+// cards, because the server decides those. Each sale is saved on this device
+// first and sent when the server answers.
+const offline = ref(false)
+const offlinePay = reactive({ open: false, tendered: '', saving: false })
+const offlineReceipt = ref<OfflineSale | null>(null)
+
+async function startOfflineTill(): Promise<boolean> {
+  const me = session.user.value
+  if (!me) return false
+  const [menu, ready] = await Promise.all([keptMenu(), keptReady(me.id)])
+  if (!menu || !ready?.shift_id) {
+    error.value = !menu
+      ? 'No connection to the server, and this device has not loaded the menu before. Cash sales offline need the till to have opened once with the network up.'
+      : 'No connection to the server, and your till was not open when it was last reached. Open the till once the connection is back.'
+    return false
+  }
+  offline.value = true
+  categories.value = menu.categories
+  products.value = menu.products
+  shift.value = {
+    id: ready.shift_id, opened_by: me.name, opened_at: '', float_ngwee: 0, closed_at: null, closed_by: null,
+    expected_ngwee: null, counted_ngwee: null, variance_ngwee: null, note: '', is_open: true, orders: 0,
+    sales_ngwee: 0, cash_ngwee: null, by_method: [],
+  }
+  menuKeptAt.value = menu.at
+  return true
+}
+const menuKeptAt = ref('')
+
+// When the server answers again, the till goes back to normal by itself,
+// unless a sale is half way through.
+watch(reachable, async (ok) => {
+  if (ok && offline.value && !offlinePay.open && !offlineReceipt.value && !cart.value.length) await load()
+})
+
+const myProblems = computed(() => waiting.value.filter((s) => s.state === 'problem' && (s.user_id === session.user.value?.id || session.can('cash.approve'))))
+const myWaiting = computed(() => waiting.value.filter((s) => s.state === 'waiting' && s.user_id === session.user.value?.id))
+const recentlySent = computed(() => sent.value.filter((s) => s.notes.length).slice(0, 5))
+
+function goOfflinePay() {
+  if (!cart.value.length) return
+  if (discountNgwee.value || promo.code.trim() || customer.phone.trim()) {
+    error.value = 'Offline, the till takes cash at menu prices only. Clear the discount, promotion code and phone number, or wait for the connection.'
+    return
+  }
+  error.value = ''
+  offlinePay.tendered = ''
+  offlinePay.open = true
+}
+
+const offlineChange = computed(() => {
+  const given = toNgwee(offlinePay.tendered || '0') ?? 0
+  return Math.max(given - total.value, 0)
+})
+
+async function takeOfflineCash() {
+  const given = offlinePay.tendered.trim() ? toNgwee(offlinePay.tendered) : null
+  if (given !== null && given < total.value) {
+    error.value = 'The cash given is less than the total.'
+    return
+  }
+  const me = session.user.value
+  if (!me || !shift.value) return
+  offlinePay.saving = true
+  error.value = ''
+  try {
+    const saved = await takeOfflineSale({
+      user_id: me.id, user_name: me.name, shift_id: shift.value.id,
+      order_type: customer.order_type, customer_name: customer.name.trim(), note: '',
+      charged_ngwee: total.value, tendered_ngwee: given,
+      lines: cart.value.map((line) => ({
+        product_id: line.product.id, quantity: line.quantity, note: line.note.trim(),
+        options: line.options.map((o) => ({ option_item_id: o.item.id })),
+        name: line.product.name, option_names: line.options.map((o) => o.item.name), total_ngwee: lineTotal(line),
+      })),
+    })
+    offlineReceipt.value = saved
+    offlinePay.open = false
+    const header = await keptReceiptHeader()
+    receipt.value = {
+      business: header?.business || 'The Green Buffet', address: header?.address || '', phone: header?.phone || '',
+      tpin: header?.tpin || '', number: `${saved.receipt_number} (offline)`,
+      at: new Date(saved.taken_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      served_by: me.name, order_type: saved.order_type.replace('_', ' '), customer: saved.customer_name, status: 'paid',
+      lines: saved.lines.map((l) => ({ name: l.name, quantity: l.quantity, each_ngwee: Math.round(l.total_ngwee / l.quantity), total_ngwee: l.total_ngwee, options: l.option_names, note: l.note })),
+      subtotal_ngwee: saved.charged_ngwee, discount_ngwee: 0, total_ngwee: saved.charged_ngwee, vat_ngwee: 0,
+      payments: [{ label: 'Cash', amount_ngwee: given ?? saved.charged_ngwee, reference: '', is_refund: false }],
+      change_ngwee: given !== null ? given - saved.charged_ngwee : 0,
+      footer: 'Taken while the till was offline. Your order number follows when the system reconnects. ' + (header?.footer || ''),
+    }
+  } catch {
+    error.value = 'This device could not save the sale, so it was not taken. Do not hand over the food; try again.'
+  } finally {
+    offlinePay.saving = false
+  }
+}
+
 async function loadPhotos() {
   const stored = await api.storedFiles({ attached_to: 'product', kind: 'photo' })
   const primary = new Map<string, string>()
@@ -456,6 +566,11 @@ function clearCart() {
 
 async function placeOrder(approvedBy?: { email: string; password: string }) {
   if (!cart.value.length) return
+  if (offline.value && reachable.value) await load()
+  if (offline.value) {
+    goOfflinePay()
+    return
+  }
   if (discountNgwee.value > 0 && customer.discountReason.trim().length < 2) {
     error.value = 'Say why the discount is given.'
     return
@@ -500,6 +615,10 @@ async function placeOrder(approvedBy?: { email: string; password: string }) {
       }
     } else if (approvedBy) {
       error.value = e instanceof ApiError ? e.message : 'Could not place the order.'
+    } else if (e instanceof ApiError && e.status === 0 && !changing.value && (await startOfflineTill())) {
+      // The network dropped just now. Nothing reached the server, so the
+      // same basket goes through as an offline cash sale.
+      goOfflinePay()
     } else {
       error.value = e instanceof ApiError ? e.message : 'Could not place the order.'
     }
@@ -528,6 +647,7 @@ async function pay() {
     placed.value = updated
     if (updated.status === 'paid') {
       receipt.value = await api.receipt(updated.id)
+      keepReceiptHeader(receipt.value)
       shift.value = await api.currentShift()
     } else {
       payment.amount = (updated.outstanding_ngwee / 100).toFixed(2)
@@ -536,7 +656,9 @@ async function pay() {
       payment.confirmed = false
     }
   } catch (e) {
-    error.value = e instanceof ApiError ? e.message : 'Could not take the payment.'
+    error.value = e instanceof ApiError && e.status === 0
+      ? 'The connection dropped while the payment was being sent, so it may or may not have been recorded. Keep the money aside and press Take payment again once the connection is back: it will not be recorded twice, and the order shows as paid if it already went through.'
+      : e instanceof ApiError ? e.message : 'Could not take the payment.'
   } finally {
     busy.value = false
   }
@@ -562,6 +684,9 @@ function startNextOrder() {
   checkedFood = -1
   placed.value = null
   receipt.value = null
+  offlineReceipt.value = null
+  // Back online since that sale: the till returns to normal now.
+  if (offline.value && reachable.value) load()
 }
 </script>
 
@@ -569,7 +694,40 @@ function startNextOrder() {
   <AppShell>
     <div class="screen-only">
       <h1>Till</h1>
+      <p v-if="offline" class="notice offline-note">
+        <b>Offline.</b> Cash sales only, at the menu prices from
+        {{ menuKeptAt ? new Date(menuKeptAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'the last load' }}.
+        Each sale is saved on this device and sent as soon as the server answers.
+        No discounts, promotion codes or stamp cards until then.
+      </p>
       <p v-if="error" class="error">{{ error }}</p>
+
+      <section v-if="myProblems.length" class="panel problems">
+        <b>Offline sales the server could not take</b>
+        <p class="muted">The cash is in the drawer. A manager enters each one by hand, then sets it aside here.</p>
+        <ul>
+          <li v-for="s in myProblems" :key="s.id">
+            <span>
+              <b>{{ s.receipt_number }}</b> · {{ s.user_name }} · {{ kwacha(s.charged_ngwee) }} ·
+              {{ new Date(s.taken_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) }}
+              <br /><span class="muted">{{ s.lines.map((l) => `${l.quantity} × ${l.name}`).join(', ') }}</span>
+              <br /><span class="warn-note">{{ s.problem }}</span>
+            </span>
+            <span class="row">
+              <button class="btn-quiet btn-small" @click="tryAgain(s.id)">Try again</button>
+              <button v-if="session.can('cash.approve')" class="btn-quiet btn-small" @click="setAside(s.id)">Entered by hand, set aside</button>
+            </span>
+          </li>
+        </ul>
+      </section>
+      <section v-if="recentlySent.length && !offline" class="panel problems">
+        <b>Offline sales sent, with something to check</b>
+        <ul>
+          <li v-for="s in recentlySent" :key="s.id">
+            <span><b>{{ s.receipt_number }}</b> is now <b>{{ s.order_number }}</b><br /><span class="muted">{{ s.notes.join(' ') }}</span></span>
+          </li>
+        </ul>
+      </section>
       <p v-if="loading" class="muted">Loading…</p>
 
       <!-- no till open yet -->
@@ -599,15 +757,19 @@ function startNextOrder() {
         <section class="shift-bar panel">
           <div>
             <b>Till open</b>
-            <span class="muted">
+            <span v-if="offline" class="muted">
+              {{ shift.opened_by }} · {{ myWaiting.length }} offline sale{{ myWaiting.length === 1 ? '' : 's' }} waiting to send
+            </span>
+            <span v-else class="muted">
               {{ shift.opened_by }} · float {{ kwacha(shift.float_ngwee) }} ·
               {{ shift.orders }} order{{ shift.orders === 1 ? '' : 's' }} ·
               {{ kwacha(shift.sales_ngwee) }} taken
             </span>
           </div>
-          <div class="bar-actions">
+          <div v-if="!offline" class="bar-actions">
+            <button v-if="myWaiting.length" class="btn-quiet btn-small" @click="syncNow()">Send waiting sales</button>
             <button v-if="session.can('cash.move')" class="btn-quiet btn-small" @click="cashMove.open = !cashMove.open">Cash drop or petty cash</button>
-            <button class="btn-quiet btn-small" @click="closing.open = !closing.open">Close the till</button>
+            <button class="btn-quiet btn-small" :disabled="myWaiting.length > 0" :title="myWaiting.length ? 'Send the waiting offline sales first' : ''" @click="closing.open = !closing.open">Close the till</button>
           </div>
         </section>
         <p v-if="cashMove.done" class="notice">{{ cashMove.done }}</p>
@@ -657,7 +819,7 @@ function startNextOrder() {
           </div>
         </div>
 
-        <section v-if="held.length && !placed && !receipt" class="panel held">
+        <section v-if="held.length && !placed && !receipt && !offline" class="panel held">
           <b>Waiting for payment</b>
           <ul>
             <li v-for="o in held" :key="o.id">
@@ -671,7 +833,21 @@ function startNextOrder() {
         </section>
 
         <!-- receipt, after payment -->
-        <section v-if="receipt" class="panel done">
+        <section v-if="receipt && offlineReceipt" class="panel done">
+          <b>{{ offlineReceipt.receipt_number }} saved on this device</b>
+          <p class="muted">
+            {{ kwacha(offlineReceipt.charged_ngwee) }} cash
+            <template v-if="receipt.change_ngwee">· change {{ kwacha(receipt.change_ngwee) }}</template>.
+            Print the receipt and give the kitchen its copy: the kitchen screen only sees it once the
+            connection is back.
+          </p>
+          <div class="row">
+            <button class="btn-primary" @click="printReceipt">Print the receipt</button>
+            <button class="btn-quiet" @click="startNextOrder">Next order</button>
+          </div>
+        </section>
+
+        <section v-else-if="receipt" class="panel done">
           <b>{{ receipt.number }} paid</b>
           <p class="muted">
             {{ kwacha(receipt.total_ngwee) }} ·
@@ -682,6 +858,24 @@ function startNextOrder() {
             <button class="btn-primary" @click="printReceipt">Print the receipt</button>
             <button class="btn-quiet" @click="startNextOrder">Next order</button>
           </div>
+        </section>
+
+        <!-- cash, taken offline -->
+        <section v-else-if="offlinePay.open" class="panel paying">
+          <header>
+            <b>{{ kwacha(total) }} to pay, cash</b>
+            <span class="muted">Offline: saved on this device and sent later</span>
+          </header>
+          <div class="pay-grid">
+            <label class="field">
+              Cash given
+              <input v-model="offlinePay.tendered" type="text" inputmode="decimal" placeholder="optional" />
+            </label>
+            <div v-if="offlineChange" class="change">Change <b>{{ kwacha(offlineChange) }}</b></div>
+            <button class="btn-primary" :disabled="offlinePay.saving" @click="takeOfflineCash">Take cash</button>
+            <button class="btn-quiet" :disabled="offlinePay.saving" @click="offlinePay.open = false">Back</button>
+          </div>
+          <p class="muted">Mobile money and card need the connection, because the payment has to be matched.</p>
         </section>
 
         <!-- payment, after the order is placed -->
@@ -845,7 +1039,7 @@ function startNextOrder() {
 
             <div class="row">
               <button class="btn-primary" :disabled="!cart.length || busy" @click="placeOrder()">
-                {{ changing ? `Save ${changing.number} and pay` : 'Go to payment' }}
+                {{ offline ? 'Take cash (offline)' : changing ? `Save ${changing.number} and pay` : 'Go to payment' }}
               </button>
               <button class="btn-quiet" :disabled="!cart.length" @click="clearCart(); changing = null">Clear</button>
             </div>
@@ -944,7 +1138,11 @@ function startNextOrder() {
 </template>
 
 <style scoped>
-.open-till, .shift-bar, .closing, .done, .paying { margin-bottom: 1rem; }
+.open-till, .shift-bar, .closing, .done, .paying, .problems { margin-bottom: 1rem; }
+.offline-note { margin: 0 0 1rem; }
+.problems ul { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: .6rem; }
+.problems li { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: .6rem; }
+.problems p { margin: .3rem 0 0; }
 .shift-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .shift-bar span { display: block; font-size: 0.84rem; }
 .row { display: flex; gap: 0.6rem; align-items: end; flex-wrap: wrap; margin-top: 0.6rem; }

@@ -133,7 +133,7 @@ RETIRED_ROLES = {"admin": "manager", "inventory": "kitchen"}
 LOCKED_MAY = ("/auth/unlock", "/auth/logout", "/auth/me", "/presence/heartbeat")
 # Calls an owner who has not yet set up two-step sign-in may make: enough to
 # set it up, change a password and sign out, and nothing else.
-SETUP_MAY = ("/auth/me", "/auth/logout", "/auth/change-password", "/auth/two-step",
+SETUP_MAY = ("/auth/me", "/auth/logout", "/auth/change-password", "/auth/two-step", "/auth/email",
              "/presence/heartbeat", "/profile/me", "/notifications", "/auth/lock", "/auth/unlock")
 
 
@@ -162,8 +162,8 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
         # nobody can carry on under someone else's name.
         if session.locked_at and not path.endswith(LOCKED_MAY):
             raise HTTPException(status.HTTP_423_LOCKED, "The screen is locked. Unlock it to carry on.")
-    from app.services.accounts import two_step_required
-    if not user.totp_enabled and two_step_required(db, user) and not any(p in path for p in SETUP_MAY):
+    from app.services.accounts import has_two_step, two_step_required
+    if not has_two_step(user) and two_step_required(db, user) and not any(p in path for p in SETUP_MAY):
         raise HTTPException(
             status.HTTP_428_PRECONDITION_REQUIRED,
             "Owner accounts must use two-step sign-in. Set it up under Security to carry on.",

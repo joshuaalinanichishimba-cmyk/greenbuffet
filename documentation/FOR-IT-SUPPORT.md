@@ -28,6 +28,21 @@ refunds, and the system will not let you.
 5. Close the incident only with what fixed it and how to stop it happening
    again.
 
+## Email
+
+IT workspace → **Email** shows whether email is set up and every message the
+system tried to send, with the reason when one failed. It never shows a
+message, a code or a link.
+
+- **Send a test** goes to your own confirmed address only.
+- "Username and Password not accepted" (535): the Google App Password was
+  deleted or mistyped. Ask Joshua or an owner to make a new one and run
+  `.\scripts\email-setup.ps1` on the server, then `.\scripts\update.ps1`.
+- Codes that failed are not resent; the person asks for a new one.
+- You cannot see anyone's code and there is no bypass. Someone without their
+  email uses a recovery code, or an owner resets their two-step on the Team
+  page.
+
 ## What you cannot do from here, on purpose
 
 - Change or delete the audit log (nobody can).
