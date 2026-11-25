@@ -18,6 +18,7 @@ import { stockAmount } from '../services/quantities'
 import { session } from '../stores/session'
 import HomeExtras from '../components/HomeExtras.vue'
 import ApprovalsPanel from '../components/ApprovalsPanel.vue'
+import TeamStatus from '../components/TeamStatus.vue'
 
 interface Overview {
   sales_ngwee: number
@@ -141,6 +142,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
 <template>
   <AppShell>
     <ApprovalsPanel />
+    <TeamStatus v-if="session.canAny('team.view', 'security.manage')" />
     <div class="head">
       <div>
         <h1>{{ greeting }}, {{ firstName }}</h1>

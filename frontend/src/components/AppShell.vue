@@ -18,6 +18,8 @@ import { useRouter } from 'vue-router'
 import { session } from '../stores/session'
 import { api } from '../services/api'
 import Icon from './Icon.vue'
+import AccountMenu from './AccountMenu.vue'
+import Avatar from './Avatar.vue'
 import logoMark from '../assets/logo-mark.png'
 import { homeFor, type HomeKind } from '../services/home'
 import { THEME_LABELS, applyTheme, nextTheme, savedTheme, type ThemeChoice } from '../services/theme'
@@ -65,7 +67,8 @@ const groups = computed(() =>
     {
       name: 'Setup',
       links: [
-        { to: '/users', label: 'Staff & roles', icon: 'users', show: can('staff.manage', 'roles.manage'), also: ['/roles'] },
+        { to: '/team', label: 'Team', icon: 'users', show: can('team.view', 'security.manage'), also: ['/team'] },
+        { to: '/users', label: 'Staff & roles', icon: 'shield', show: can('staff.manage', 'roles.manage'), also: ['/roles'] },
         { to: '/settings', label: 'Settings', icon: 'sliders', show: can('settings.edit', 'menu.edit', 'books.view', 'audit.view'), also: ['/activity'] },
       ],
     },
@@ -91,13 +94,6 @@ function isActive(link: Link) {
   return (link.also ?? []).some((p) => here === p || here.startsWith(p + '/'))
 }
 
-const initials = computed(() =>
-  (session.user.value?.name ?? '?')
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join(''),
-)
 
 const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -149,8 +145,8 @@ function cycleTheme() {
 }
 const themeIcon = computed(() => (theme.value === 'light' ? 'sun' : theme.value === 'dark' ? 'moon' : 'monitor'))
 
-function signOut() {
-  session.signOut()
+async function signOut() {
+  await session.signOutEverywhere()
   router.replace('/login')
 }
 </script>
@@ -186,7 +182,10 @@ function signOut() {
       </nav>
 
       <div class="me">
-        <span class="avatar">{{ initials }}</span>
+        <RouterLink to="/profile" class="me-link" aria-label="My profile">
+          <Avatar v-if="session.user.value" :user-id="session.user.value.id" :name="session.user.value.name"
+                  :photo-id="session.user.value.photo_id" :size="38" />
+        </RouterLink>
         <div class="me-text">
           <b>{{ session.user.value?.name }}</b>
           <span>{{ session.user.value?.role_label }}</span>
@@ -221,7 +220,13 @@ function signOut() {
           <span class="live" />
           Open · {{ waitMinutes }} min wait
         </RouterLink>
+        <AccountMenu class="acct-slot" />
       </header>
+
+      <p v-if="!session.connected.value" class="offline" role="status">
+        Connection to the server lost (network or power). Reconnecting… What is on screen is kept;
+        nothing is sent twice.
+      </p>
 
       <p v-if="minutesLeft !== null && minutesLeft <= 15" class="expiry">
         Your sign-in ends in {{ Math.max(minutesLeft, 0) }} minutes. Sign in again to carry on.
@@ -315,6 +320,8 @@ nav section { display: grid; gap: .15rem; }
   font-size: .85rem; font-weight: 800; text-decoration: none; white-space: nowrap;
 }
 .live { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 25%, transparent); }
+.offline { margin: 0; padding: .55rem 2rem; background: var(--warn-soft); color: var(--warn); font-size: .88rem; font-weight: 700; }
+.me-link { display: inline-flex; border-radius: 50%; }
 .expiry { margin: 0; padding: .55rem 2rem; background: var(--warn-soft); color: var(--warn); font-size: .88rem; }
 
 .page { padding: 1.4rem 2rem 5rem; max-width: 1220px; width: 100%; }
@@ -335,9 +342,14 @@ nav section { display: grid; gap: .15rem; }
   .top { padding: .6rem max(1rem, env(safe-area-inset-left, 0px)); gap: .6rem; }
   .date { display: none; }
   .search { flex: 1 1 auto; }
+  .acct-slot { margin-left: auto; }
+  .offline { padding: .55rem 1rem; }
   .page { padding: 1.1rem max(1rem, env(safe-area-inset-left, 0px)) 4rem; }
 }
 @media (max-width: 520px) {
   .open-pill { padding: .35rem .6rem; font-size: .78rem; }
+}
+@media (max-width: 460px) {
+  .open-pill { display: none; }
 }
 </style>

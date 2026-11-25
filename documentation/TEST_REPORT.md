@@ -1,5 +1,18 @@
 # Test report
 
+## Stage 23, 24 November 2026 (profiles, presence, security)
+
+Run against a test copy of the database. Your live data was not touched.
+
+| Suite | Result |
+|---|---|
+| `tests/test_profiles.py`: both owners have their own profiles and cannot suspend or archive each other; each cashier and cook has a profile; presence follows the heartbeat (online, away, connection lost and back, offline, unknown, closed, signed out); on duty comes from clocking not presence; nobody changes their own role or pay; suspend cuts access and restore gives it back; archived people leave the directory; one device signed out alone; a manager cannot see sign-in history; profile changes audited without passwords; cashiers cannot read each other's details; locked screen refused (423) until the same person unlocks; switching person ends the session; two-step sign-in with codes and single-use recovery codes; owners must set up two-step; owners told about new accounts and lockouts, never about online/offline; Team status figures match the database | 16 passed |
+| `tests/test_money_flows.py`, `tests/test_security.py` | 54 passed |
+| `tests/probe_customer_security.py` | 29 passed |
+| Browser run-through of the new screens | 21 / 21 |
+| Screen sweep: 45 screens × phone and desktop × light and dark | 180 / 180 clean |
+
+
 ## Stage 22, 24 November 2026 (Phases 0 and 1)
 
 Run against a test copy of the database. Your live data was not touched.

@@ -53,6 +53,8 @@ PERMISSION_CATALOGUE: list[tuple[str, str, str, int]] = [
     ("settings.edit", "System settings", "Administration", 420),
     ("audit.view", "Audit logs", "Administration", 430),
     ("feedback.view", "Customer feedback", "Administration", 440),
+    ("team.view", "Team directory: who is working and online", "Administration", 450),
+    ("security.manage", "Others' sign-in history, devices, archiving and two-step reset", "Administration", 460),
 ]
 
 ALL_PERMISSIONS = [c for c, _, _, _ in PERMISSION_CATALOGUE]
@@ -86,7 +88,7 @@ DEFAULT_ROLES: dict[str, tuple[str, str, list[str]]] = {
         "Manager",
         "Day-to-day running, approvals at the till, stock, books and people; no payroll approval",
         OPS + ["books.view", "books.edit", "hr.view", "hr.manage", "payroll.view",
-               "attendance.clock", "attendance.manage", "leave.approve", "audit.view"],
+               "attendance.clock", "attendance.manage", "leave.approve", "audit.view", "team.view"],
     ),
     "accountant": (
         "Accountant",
@@ -115,19 +117,46 @@ DEFAULT_ROLES: dict[str, tuple[str, str, list[str]]] = {
 RETIRED_ROLES = {"admin": "manager", "inventory": "kitchen"}
 
 
+# Calls a locked screen may still make: to unlock, sign out, switch person,
+# and to keep its heartbeat going (a locked screen is "away", not offline).
+LOCKED_MAY = ("/auth/unlock", "/auth/logout", "/auth/me", "/presence/heartbeat")
+# Calls an owner who has not yet set up two-step sign-in may make: enough to
+# set it up, change a password and sign out, and nothing else.
+SETUP_MAY = ("/auth/me", "/auth/logout", "/auth/change-password", "/auth/two-step",
+             "/presence/heartbeat", "/profile/me", "/notifications", "/auth/lock", "/auth/unlock")
+
+
 def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """Reads the bearer token and returns the signed-in user, or refuses."""
     header = request.headers.get("Authorization", "")
     if not header.lower().startswith("bearer "):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign in to continue.")
     payload = decode_token(header[7:].strip())
-    if not payload:
+    if not payload or payload.get("purpose"):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session has ended. Sign in again.")
     user = db.get(User, payload.get("sub"))
     if not user or not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This account is disabled.")
     if payload.get("v", 0) != (user.token_version or 0):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session has ended. Sign in again.")
+    path = request.url.path
+    sid = payload.get("sid")
+    request.state.session_id = sid
+    if sid:
+        from app.models.access import UserSession
+        session = db.get(UserSession, sid)
+        if not session or session.user_id != user.id or session.ended_at is not None:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "This device was signed out. Sign in again.")
+        # Locked at the counter: refused here, not only hidden on screen, so
+        # nobody can carry on under someone else's name.
+        if session.locked_at and not path.endswith(LOCKED_MAY):
+            raise HTTPException(status.HTTP_423_LOCKED, "The screen is locked. Unlock it to carry on.")
+    from app.services.accounts import two_step_required
+    if not user.totp_enabled and two_step_required(db, user) and not any(p in path for p in SETUP_MAY):
+        raise HTTPException(
+            status.HTTP_428_PRECONDITION_REQUIRED,
+            "Owner accounts must use two-step sign-in. Set it up under Security to carry on.",
+        )
     return user
 
 

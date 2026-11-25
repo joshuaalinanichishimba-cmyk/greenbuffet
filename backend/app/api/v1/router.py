@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     admin, auth, books, customers, dashboard,
     home, health, kitchen, menu, people, reports,
-    sales, settings_api, stock,
+    sales, settings_api, stock, team,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -21,3 +21,4 @@ api_router.include_router(settings_api.router)
 api_router.include_router(customers.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(home.router)
+api_router.include_router(team.router)

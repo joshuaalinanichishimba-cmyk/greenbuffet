@@ -9,7 +9,7 @@
   usually signs in cashiers, the office PC the accountant.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { session } from '../stores/session'
 import { api, ApiError } from '../services/api'
@@ -64,7 +64,11 @@ function focus(id: string) {
   window.setTimeout(() => document.getElementById(id)?.focus(), 0)
 }
 
+// The online demo says so, instead of the "switch test mode off" warning.
+const demo = ref(false)
+
 onMounted(async () => {
+  api.get<{ environment?: string }>('/health').then((h) => { demo.value = h.environment === 'demo' }).catch(() => undefined)
   try {
     roles.value = await api.signInRoles()
     let saved = ''
@@ -84,7 +88,30 @@ onMounted(async () => {
   }
 })
 
+// Two-step sign-in: after the password, the six-digit code from the phone.
+const ticket = ref('')
+const code = ref('')
+const codeBox = ref<HTMLInputElement | null>(null)
+
+async function submitCode() {
+  error.value = ''
+  busy.value = true
+  try {
+    const result = await session.signInCode(ticket.value, code.value.trim())
+    remember(result.user.role_id)
+    ticket.value = ''
+    router.replace(result.user.must_change_password ? '/change-password' : '/')
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : 'Something went wrong. Try again.'
+    code.value = ''
+    if (e instanceof ApiError && e.message.includes('password again')) ticket.value = ''
+  } finally {
+    busy.value = false
+  }
+}
+
 async function submit() {
+  if (ticket.value) return submitCode()
   error.value = ''
   if (roles.value.length && !roleId.value) {
     error.value = 'Choose the kind of account you are signing in as.'
@@ -93,6 +120,14 @@ async function submit() {
   busy.value = true
   try {
     const result = await session.signIn(email.value, password.value, roleId.value || undefined)
+    if (result.needs_code) {
+      ticket.value = result.ticket ?? ''
+      code.value = ''
+      busy.value = false
+      await nextTick()
+      codeBox.value?.focus()
+      return
+    }
     remember(result.user.role_id)
     router.replace(result.user.must_change_password ? '/change-password' : '/')
   } catch (e) {
@@ -110,7 +145,11 @@ async function submit() {
 
       <h1>Staff sign in</h1>
 
-      <p v-if="testMode" class="test">
+      <p v-if="demo" class="test">
+        <b>Online demo.</b> Everything here is made up: the staff, the orders and the money. Pick an account below,
+        then press Sign in. Each kind of account sees its own screens.
+      </p>
+      <p v-else-if="testMode" class="test">
         <b>Test mode.</b> Tap your card and press Enter. Switch this off before real use.
       </p>
 
@@ -119,6 +158,17 @@ async function submit() {
         <button type="button" class="change" @click="roleId = ''">Change</button>
       </p>
 
+      <template v-if="ticket">
+        <p class="as">Two-step sign-in for <b>{{ email }}</b></p>
+        <label for="code">Code from your authenticator app</label>
+        <input id="code" ref="codeBox" v-model="code" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="9" placeholder="123456" required class="code" />
+        <p class="hint">Lost your phone? Type one of your recovery codes instead.</p>
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
+        <button class="go" :disabled="busy || code.trim().length < 6">{{ busy ? 'Checking…' : 'Sign in' }}</button>
+        <button type="button" class="change" @click="ticket = ''; code = ''; error = ''">Back</button>
+      </template>
+      <template v-else>
       <label for="email">Email</label>
       <input id="email" v-model="email" type="email" autocomplete="username" required />
 
@@ -130,8 +180,9 @@ async function submit() {
       <button class="go" :disabled="busy">
         {{ busy ? 'Signing in…' : chosen ? `Sign in as ${chosen.label}` : 'Sign in' }}
       </button>
+      </template>
 
-      <template v-if="roles.length">
+      <template v-if="roles.length && !ticket">
         <hr />
         <p class="label" id="kinds">I am signing in as</p>
         <div class="kinds" role="radiogroup" aria-labelledby="kinds">
@@ -237,4 +288,5 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 1rem 0 .4rem; width: 
 
 .error { background: color-mix(in srgb, var(--danger) 12%, var(--paper)); color: var(--danger); padding: 0.6rem 0.8rem; border-radius: 10px; font-size: 0.92rem; margin: 0; }
 .hint { font-size: 0.85rem; color: var(--muted); margin: 0.3rem 0 0; }
+.code { letter-spacing: .3em; font-weight: 800; font-size: 1.3rem; text-align: center; }
 </style>

@@ -86,6 +86,9 @@ BUSINESS_KEYS = {
     # cashier's discount above the percentage needs a manager's approval.
     "till.variance_limit_ngwee": "2000",
     "till.discount_limit_percent": "10",
+    # Presence and the shared counter screens (stage 23).
+    "presence.away_minutes": "5",
+    "lock.after_minutes": "10",
     "hours.sun": "08:30-15:00",
     "hours.mon": "08:30-19:30",
     "hours.tue": "08:30-19:30",
@@ -102,6 +105,8 @@ WHOLE_NUMBERS = {
     "menu.topping_charge_ngwee": (0, 100_000),
     "till.variance_limit_ngwee": (0, 10_000_000),
     "till.discount_limit_percent": (0, 100),
+    "presence.away_minutes": (1, 120),
+    "lock.after_minutes": (0, 240),
 }
 
 

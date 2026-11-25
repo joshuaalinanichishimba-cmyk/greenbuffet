@@ -53,7 +53,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   // A 401 on the login form means the details were wrong; a 401 anywhere else
   // means the token has expired. Showing the wrong one of those two confuses
   // someone who simply mistyped their password.
-  if (response.status === 401 && !path.startsWith('/auth/login')) {
+  // A locked screen: the server refuses the token until the person unlocks.
+  if (response.status === 423) {
+    window.dispatchEvent(new CustomEvent('gb-locked'))
+    throw new ApiError(423, 'The screen is locked. Unlock it to carry on.')
+  }
+  // An owner without two-step sign-in is sent to set it up.
+  if (response.status === 428) {
+    window.dispatchEvent(new CustomEvent('gb-two-step'))
+  }
+  if (response.status === 401 && !path.startsWith('/auth/login') && !path.startsWith('/auth/unlock')) {
     setToken(null)
     window.dispatchEvent(new CustomEvent('gb-session-ended'))
     throw new ApiError(401, 'Your session has ended. Sign in again.')
@@ -80,6 +89,9 @@ export interface User {
   role_label: string
   is_active: boolean
   must_change_password: boolean
+  photo_id?: string | null
+  totp_enabled?: boolean
+  two_step_required?: boolean
 }
 
 export interface LoginResult {
@@ -87,6 +99,9 @@ export interface LoginResult {
   expires_at: string
   user: User
   permissions: string[]
+  needs_code?: boolean
+  ticket?: string
+  session_id?: string
 }
 
 export interface Role {
@@ -687,6 +702,9 @@ export const api = {
     request<LoginResult>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password, role_id: role_id || null }) }),
   signInRoles: () => request<{ id: string; label: string; sees: string; accounts: { name: string; email: string }[] }[]>('/auth/roles'),
   me: () => request<LoginResult>('/auth/me'),
+  loginCode: (ticket: string, code: string) =>
+    request<LoginResult>('/auth/login/code', { method: 'POST', body: JSON.stringify({ ticket, code }) }),
+  logout: (sw = false) => request<{ ok: boolean }>('/auth/logout', { method: 'POST', body: JSON.stringify({ switch: sw }) }),
   changePassword: (current_password: string, new_password: string) =>
     request<{ ok: boolean; token: string; expires_at: string }>('/auth/change-password', {
       method: 'POST',
@@ -916,6 +934,25 @@ export const api = {
     const query = q.toString()
     return request<StoredFile[]>(`/settings/files${query ? `?${query}` : ''}`)
   },
+  uploadPhoto: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
+    const response = await fetch(`${base}/profile/me/photo`, {
+      method: 'POST', headers: { Authorization: `Bearer ${getToken()}` }, body: form,
+    })
+    if (!response.ok) {
+      let detail = 'The photograph could not be stored.'
+      try {
+        const body = await response.json()
+        if (typeof body.detail === 'string') detail = body.detail
+      } catch {
+        /* non-JSON error */
+      }
+      throw new ApiError(response.status, detail)
+    }
+    return (await response.json()) as { photo_id: string }
+  },
   uploadFile: async (file: File, fields: Record<string, string | boolean>) => {
     const form = new FormData()
     form.append('file', file)
@@ -950,7 +987,89 @@ export const api = {
     request<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}) }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
+  del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
   remove: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+}
+
+// ---- profiles and the team (stage 23) ----
+
+export type PresenceStatus = 'online' | 'away' | 'lost' | 'offline' | 'unknown'
+
+export interface Presence {
+  status: PresenceStatus
+  label: string
+  last_active: string | null
+  devices: number
+}
+
+export interface Duty {
+  on_staff_list: boolean
+  on_duty: boolean
+  since: string | null
+  on_leave: boolean
+  till_open: boolean
+  till_since: string | null
+}
+
+export interface TeamCard {
+  id: string
+  name: string
+  initials: string
+  photo_id: string | null
+  role_id: string
+  role_label: string
+  job_title: string
+  department: string
+  employee_number: string
+  presence: Presence
+  duty: Duty
+  duty_label: string
+  account: { code: 'active' | 'suspended' | 'archived' | 'new'; label: string }
+}
+
+export interface Profile extends TeamCard {
+  email: string
+  phone: string
+  employment_status: string
+  start_date: string | null
+  created_at: string | null
+  created_by: string
+  responsibilities: { area: string; items: string[] }[]
+  two_step: { enabled: boolean; required: boolean }
+  tabs: string[]
+  can: Record<'edit_account' | 'edit_employment' | 'change_role' | 'suspend' | 'restore' | 'archive'
+    | 'reset_password' | 'revoke_sessions' | 'reset_two_step', boolean>
+  is_me: boolean
+  suspended_reason?: string
+  archived_at?: string | null
+  preferences?: { notify: Record<string, boolean>; labels: Record<string, string> }
+}
+
+export interface Notice {
+  id: string
+  at: string
+  kind: string
+  level: 'info' | 'warn'
+  title: string
+  body: string
+  link: string
+  read: boolean
+}
+
+export interface DeviceSession {
+  id: string
+  device: string
+  browser: string
+  ip: string
+  started_at: string
+  last_seen_at: string | null
+  last_active_at: string | null
+  expires_at: string
+  state: PresenceStatus
+  state_label: string
+  this_device: boolean
+  ended_at?: string
+  reason?: string
 }

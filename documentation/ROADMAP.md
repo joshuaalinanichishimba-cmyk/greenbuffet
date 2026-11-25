@@ -34,7 +34,8 @@ management system: customers do not order through it.
 | 20 | Counter point of sale only, the printed menu, one-tap sign-in | 2 days | Done |
 | 21 | Dark mode fixed on every screen, receipt-only printing, My clocking, test sign-in | 1 day | Done |
 | 22 | Plan phases 0 and 1: protection, cash and till controls, owner protection | 2 days | Done |
-| 23 | Plan phase 2: stock counts, waste log, expiry dates (plus till handover and a discount report) | about 1 week | Next |
+| 23 | Profiles, online status, team directory, devices, two-step sign-in, lock screen | 1 day | Done |
+| 24 | Plan phase 2: stock counts, waste log, expiry dates (plus till handover and a discount report) | about 1 week | Next |
 
 ## What Stage 1 contains
 

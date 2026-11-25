@@ -10,6 +10,7 @@ from pathlib import Path
 
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,16 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     APP_TIMEZONE: str = "Africa/Lusaka"
     BUSINESS_NAME: str = "The Green Buffet"
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _driver(cls, value: str) -> str:
+        # Hosts such as Render hand out "postgres://..." or "postgresql://...";
+        # the system talks to PostgreSQL through psycopg 3.
+        for plain in ("postgres://", "postgresql://"):
+            if value.startswith(plain):
+                return "postgresql+psycopg://" + value[len(plain):]
+        return value
 
     @property
     def cors_list(self) -> list[str]:

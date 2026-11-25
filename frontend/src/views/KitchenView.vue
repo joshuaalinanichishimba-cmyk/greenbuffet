@@ -17,6 +17,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ApiError, api, getToken, type KitchenTicket } from '../services/api'
 import { session } from '../stores/session'
 import { homeFor } from '../services/home'
+import AccountMenu from '../components/AccountMenu.vue'
 
 // For an account whose home IS this board, "/" leads straight back here, so
 // its way out goes to the next most useful screen instead of in a circle.
@@ -344,6 +345,7 @@ onUnmounted(() => {
         <button class="plain" @click="showPrep = !showPrep">{{ showPrep ? 'Hide prep list' : 'Show prep list' }}</button>
         <span class="clock">{{ clockText }}</span>
         <RouterLink :to="away.to" class="plain">{{ away.label }}</RouterLink>
+        <AccountMenu dark />
       </div>
     </header>
 

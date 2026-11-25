@@ -1,8 +1,8 @@
 # Database documentation
 
-Generated from the models on 24 November 2026: 43 tables. Money columns end in `_ngwee` (whole ngwee). Stock quantities end in `_milli` (thousandths of the ingredient's unit). Times are stored in UTC and shown in Africa/Lusaka time.
+Generated from the models on 24 November 2026: 45 tables. Money columns end in `_ngwee` (whole ngwee). Stock quantities end in `_milli` (thousandths of the ingredient's unit). Times are stored in UTC and shown in Africa/Lusaka time.
 
-The delivery, catering and messages tables and columns were removed in stage 22, after a backup.
+The delivery, catering and messages tables and columns were removed in stage 22, after a backup. Stage 23 added user_sessions and notifications, and profile and two-step columns on users.
 
 ## accounts
 
@@ -262,6 +262,21 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | at | timestamp with time zone | no |  |
 | succeeded | boolean | no |  |
 | ip | varchar(60) | no |  |
+| device | varchar(80) | no |  |
+
+## notifications
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| id | varchar(32) | no | primary key |
+| user_id | varchar(32) | no | → users.id |
+| at | timestamp with time zone | no |  |
+| kind | varchar(30) | no |  |
+| level | varchar(10) | no |  |
+| title | varchar(120) | no |  |
+| body | varchar(300) | no |  |
+| link | varchar(120) | no |  |
+| read_at | timestamp with time zone | yes |  |
 
 ## option_groups
 
@@ -639,6 +654,25 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | created_at | timestamp with time zone | no |  |
 | created_by | varchar(80) | yes |  |
 
+## user_sessions
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| id | varchar(32) | no | primary key |
+| user_id | varchar(32) | no | → users.id |
+| started_at | timestamp with time zone | no |  |
+| expires_at | timestamp with time zone | no |  |
+| last_seen_at | timestamp with time zone | yes |  |
+| last_active_at | timestamp with time zone | yes |  |
+| closed_at | timestamp with time zone | yes |  |
+| locked_at | timestamp with time zone | yes |  |
+| ended_at | timestamp with time zone | yes |  |
+| end_reason | varchar(20) | no |  |
+| ended_by | varchar(80) | no |  |
+| device | varchar(20) | no |  |
+| browser | varchar(40) | no |  |
+| ip | varchar(60) | no |  |
+
 ## users
 
 | Column | Type | Null | Notes |
@@ -652,5 +686,13 @@ The delivery, catering and messages tables and columns were removed in stage 22,
 | must_change_password | boolean | no |  |
 | token_version | integer | no |  |
 | last_login_at | timestamp with time zone | yes |  |
+| phone | varchar(24) | no |  |
+| photo_id | varchar(32) | yes |  |
+| preferences | text | no |  |
+| suspended_reason | varchar(200) | no |  |
+| archived_at | timestamp with time zone | yes |  |
+| totp_secret | varchar(64) | no |  |
+| totp_enabled | boolean | no |  |
+| recovery_codes | text | no |  |
 | created_at | timestamp with time zone | no |  |
 | created_by | varchar(80) | yes |  |

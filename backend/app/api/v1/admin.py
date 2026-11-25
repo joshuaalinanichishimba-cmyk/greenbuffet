@@ -11,6 +11,7 @@ from app.schemas.access import (
     PasswordResetOut, PermissionOut, RoleCreateIn, RoleOut, RoleUpdateIn, UserCreateIn,
     UserCreateOut, UserOut, UserPatchIn,
 )
+from app.services.accounts import end_sessions, notify_owners
 from app.services.audit import record
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -91,6 +92,12 @@ def update_role(role_id: str, body: RoleUpdateIn, db: Session = Depends(get_db),
     if body.label:
         role.label = body.label.strip()
     record(db, user.name, "security", "Role permissions changed", role.label, role.id, before=before, after=codes)
+    added = sorted(set(codes) - set(before or []))
+    removed = sorted(set(before or []) - set(codes))
+    if added or removed:
+        notify_owners(db, "access_changed", f"{role.label} permissions changed",
+                      (f"Added: {', '.join(added)}. " if added else "") + (f"Removed: {', '.join(removed)}. " if removed else "")
+                      + f"By {user.name}.", "/roles", exclude=user.id)
     db.commit()
     db.refresh(role)
     return _role_out(role)
@@ -119,6 +126,8 @@ def create_user(body: UserCreateIn, db: Session = Depends(get_db), user: User = 
     # the login form before this account existed would otherwise start it locked out.
     db.query(LoginAttempt).filter(LoginAttempt.email == email).delete()
     record(db, user.name, "security", "User account created", f"{created.name} as {body.role_id}", email)
+    notify_owners(db, "account_created", f"New account: {created.name}",
+                  f"{created.name}, {db.get(Role, body.role_id).label}, made by {user.name}.", "/team", exclude=user.id)
     db.commit()
     db.refresh(created)
     # The password itself is never stored in the audit log, only handed back here.
@@ -167,10 +176,24 @@ def patch_user(user_id: str, body: UserPatchIn, db: Session = Depends(get_db), u
         if not db.get(Role, body.role_id):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown role.")
         target.role_id = body.role_id
+    role_changed = bool(body.role_id and before["role"] != body.role_id)
     if body.is_active is not None:
         if body.is_active is False and target.is_active:
             target.token_version = (target.token_version or 0) + 1
+            end_sessions(db, target, "suspended", user.name)
         target.is_active = body.is_active
+    if role_changed:
+        # New permissions take effect on the next sign-in; end the old sessions
+        # so nobody keeps powers they no longer have.
+        target.token_version = (target.token_version or 0) + 1
+        end_sessions(db, target, "revoked", user.name)
+        notify_owners(db, "access_changed", f"{target.name}'s role changed",
+                      f"{before['role']} to {target.role_id}, by {user.name}.", f"/team/{target.id}", exclude=user.id)
+    if body.is_active is not None and body.is_active != before["active"]:
+        notify_owners(db, "account_suspended",
+                      f"{target.name}'s account {'restored' if body.is_active else 'switched off'}",
+                      f"By {user.name}.", f"/team/{target.id}",
+                      level="info" if body.is_active else "warn", exclude=user.id)
     record(db, user.name, "security", "User account changed", target.name, target.email,
            before=before,
            after={"name": target.name, "email": target.email, "role": target.role_id, "active": target.is_active})
@@ -209,6 +232,7 @@ def reset_password(user_id: str, db: Session = Depends(get_db), user: User = Dep
     target.password_hash = hash_password(temporary)
     target.must_change_password = True
     target.token_version = (target.token_version or 0) + 1   # ends their open sessions
+    end_sessions(db, target, "password", user.name)
     # Failed attempts would otherwise keep the account locked out after the reset.
     db.query(LoginAttempt).filter(LoginAttempt.email == target.email).delete()
     record(db, user.name, "security", "Password reset", target.name, target.email)

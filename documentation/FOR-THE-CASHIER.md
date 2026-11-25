@@ -137,3 +137,17 @@ An order not yet paid is listed under **Waiting for payment** on the till. **Tak
 payment** takes the money for it. **Change** puts it back in the cart; change
 what you need and place it again: it keeps the same number. A paid order can't
 be changed; ask a manager about a refund.
+
+## Your profile and the lock screen
+
+Tap your picture at the top right for your profile. There you can add a
+photograph, your phone number and a new password, and see your own activity
+and hours.
+
+Leaving the counter for a moment? Tap your picture, then **Lock screen**. It
+also locks by itself after 10 minutes untouched. Unlock it with your own
+password; what you were doing is still there.
+
+If someone else needs the till, they tap **Switch person** and sign in as
+themselves. Your unfinished order waits for you on that computer. Never sell
+under someone else's name.

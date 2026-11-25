@@ -195,6 +195,9 @@ button { cursor: pointer; }
   transition: background .15s, border-color .15s, transform .1s;
 }
 .btn-primary:active, .btn-quiet:active, .btn-danger:active, .btn-outline:active { transform: translateY(1px); }
+/* The shared shape above clears every border; these two are drawn with one, as in the demo. */
+.btn-outline { border-color: var(--green); }
+.btn-danger { border-color: var(--danger); }
 .btn-quiet { background: var(--paper); border-color: var(--line); color: var(--ink); }
 .btn-quiet:hover:not([disabled]) { border-color: var(--green); background: var(--leaf-soft); }
 .btn-dark { background: var(--forest); color: #fff; }

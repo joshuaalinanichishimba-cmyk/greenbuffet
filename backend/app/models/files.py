@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin, new_id
 
 # What a file can be attached to.
-ATTACH_TO = ("product", "supplier", "employee", "purchase", "business", "other")
+ATTACH_TO = ("product", "supplier", "employee", "purchase", "business", "user", "other")
 KINDS = ("photo", "invoice", "contract", "certificate", "receipt", "other")
 
 

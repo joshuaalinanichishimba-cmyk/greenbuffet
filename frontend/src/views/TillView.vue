@@ -262,9 +262,43 @@ async function loadPhotos() {
   }
 }
 
+// ---- the basket survives a lock or a change of person ----------------------
+// On a shared counter computer someone may lock the screen or hand over
+// mid-order. Each person's unfinished basket is kept on this computer under
+// their own account and comes back when they sign in again. It is only a
+// draft: nothing reaches the server until the order is placed, so nothing can
+// be charged twice or appear under the wrong name.
+const draftKey = () => `gb-till-draft-${session.user.value?.id ?? ''}`
+function saveDraft() {
+  try {
+    if (!cart.value.length) localStorage.removeItem(draftKey())
+    else localStorage.setItem(draftKey(), JSON.stringify({ cart: cart.value, customer: { ...customer }, at: Date.now() }))
+  } catch {
+    /* storage full or blocked: the basket simply is not kept */
+  }
+}
+function restoreDraft() {
+  try {
+    const raw = localStorage.getItem(draftKey())
+    if (!raw || cart.value.length) return
+    const draft = JSON.parse(raw) as { cart: CartLine[]; customer: typeof customer; at: number }
+    // A basket from another day is stale: prices and stock may have moved on.
+    if (Date.now() - draft.at > 12 * 3600_000) {
+      localStorage.removeItem(draftKey())
+      return
+    }
+    cart.value = draft.cart
+    Object.assign(customer, draft.customer)
+  } catch {
+    /* unreadable draft: start clean */
+  }
+}
+watch([cart, () => ({ ...customer })], saveDraft, { deep: true })
+
 onMounted(async () => {
   await load()
   await loadHeld()
+  restoreDraft()
 })
 
 async function openTill() {

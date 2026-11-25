@@ -26,9 +26,15 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(user_id: str, role_id: str, version: int = 0) -> tuple[str, datetime]:
-    expires = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+def create_access_token(
+    user_id: str, role_id: str, version: int = 0, session_id: str | None = None,
+    expires: datetime | None = None,
+) -> tuple[str, datetime]:
+    expires = expires or datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
     payload = {"sub": user_id, "role": role_id, "exp": expires, "v": version}
+    if session_id:
+        # The device this token belongs to, so it can be signed out on its own.
+        payload["sid"] = session_id
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
     return token, expires
 
@@ -48,3 +54,14 @@ _SAFE_ALPHABET = "abcdefghijkmnpqrstuvwxyzACDEFGHJKLMNPQRTUVWXY23456789"
 def generate_temp_password(length: int = 10) -> str:
     """A temporary password that is easy to read aloud and type."""
     return "".join(secrets.choice(_SAFE_ALPHABET) for _ in range(length))
+
+
+def create_ticket(user_id: str, version: int, minutes: int = 5) -> str:
+    """A short-lived pass between the password and the two-step code.
+
+    It proves the password was right a moment ago and nothing else: the API
+    refuses it everywhere except the code check.
+    """
+    expires = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    payload = {"sub": user_id, "purpose": "two_step", "exp": expires, "v": version}
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)

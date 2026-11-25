@@ -88,14 +88,17 @@ def seed(owner_email: str = "owner@greenbuffet.zm", owner_password: str | None =
                 brand_new.add(code)
         db.flush()
 
+        made_now: set[str] = set()
         for role_id, (label, description, codes) in DEFAULT_ROLES.items():
             role = db.get(Role, role_id)
             if not role:
                 role = Role(id=role_id, label=label, description=description, is_system=True)
                 db.add(role)
                 db.flush()
-                for code in codes:
+                for code in dict.fromkeys(codes):
                     db.add(RolePermission(role_id=role_id, permission_code=code))
+                made_now.add(role_id)
+        db.flush()
 
         # Retired roles: their people move to the role that now does that
         # work, then the role goes. Kitchen staff take on the store room's
@@ -130,7 +133,8 @@ def seed(owner_email: str = "owner@greenbuffet.zm", owner_password: str | None =
         if brand_new:
             for role_id, (_, _, codes) in DEFAULT_ROLES.items():
                 role = db.get(Role, role_id)
-                if not role or not role.is_system:
+                # A role made a moment ago already has all of its permissions.
+                if not role or not role.is_system or role_id in made_now:
                     continue
                 held = {
                     rp.permission_code

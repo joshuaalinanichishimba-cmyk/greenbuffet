@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import { api, setToken, getToken, type User } from '../services/api'
+import { api, setToken, getToken, type LoginResult, type User } from '../services/api'
 
 const EXPIRY_KEY = 'gb-token-expires'
 
@@ -7,6 +7,12 @@ const user = ref<User | null>(null)
 const permissions = ref<string[]>([])
 const ready = ref(false)
 const expiresAt = ref<number | null>(null)
+// The screen is locked: the server refuses work until the same person unlocks.
+const locked = ref(false)
+// Unread notices, kept fresh by the heartbeat.
+const unread = ref(0)
+// false while the server cannot be reached (network down, load shedding).
+const connected = ref(true)
 
 function readExpiry(): number | null {
   try {
@@ -45,6 +51,9 @@ export const session = {
   permissions,
   ready,
   expiresAt,
+  locked,
+  unread,
+  connected,
   signedIn: computed(() => !!user.value),
   can: (code: string) => permissions.value.includes(code),
   canAny: (...codes: string[]) => codes.some((c) => permissions.value.includes(c)),
@@ -54,11 +63,24 @@ export const session = {
     // Held in memory only, for one use: when a temporary password must be
     // changed straight away, the "current password" box is already filled.
     justTyped = result.user.must_change_password ? password : ''
+    // Two-step sign-in: the caller asks for the code and finishes with signInCode.
+    if (result.needs_code) return result
+    session.accept(result)
+    return result
+  },
+
+  async signInCode(ticket: string, code: string) {
+    const result = await api.loginCode(ticket, code)
+    session.accept(result)
+    return result
+  },
+
+  accept(result: LoginResult) {
+    locked.value = false
     setToken(result.token)
     writeExpiry(result.expires_at)
     user.value = result.user
     permissions.value = result.permissions
-    return result
   },
 
   async restore() {
@@ -91,7 +113,19 @@ export const session = {
     user.value = next
   },
 
+  /** Ends this device's session on the server too (best effort), then here. */
+  async signOutEverywhere(handOver = false) {
+    try {
+      if (getToken()) await api.logout(handOver)
+    } catch {
+      /* already ended, or offline: the token is dropped here either way */
+    }
+    session.signOut()
+  },
+
   signOut() {
+    locked.value = false
+    unread.value = 0
     setToken(null)
     writeExpiry(null)
     user.value = null

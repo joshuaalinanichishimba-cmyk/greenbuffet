@@ -23,6 +23,10 @@ class UserOut(BaseModel):
     role_label: str
     is_active: bool
     must_change_password: bool
+    photo_id: str | None = None
+    totp_enabled: bool = False
+    # An owner without two-step sign-in: the screens send them to set it up.
+    two_step_required: bool = False
 
 
 class LoginOut(BaseModel):
@@ -30,6 +34,34 @@ class LoginOut(BaseModel):
     expires_at: str
     user: UserOut
     permissions: list[str]
+    # The password was right and the account uses two-step sign-in: the
+    # ticket goes back with the six-digit code to /auth/login/code.
+    needs_code: bool = False
+    ticket: str = ""
+    session_id: str = ""
+
+
+class CodeIn(BaseModel):
+    ticket: str = Field(min_length=10, max_length=1000)
+    code: str = Field(min_length=6, max_length=12)
+
+
+class PasswordIn(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
+class LogoutIn(BaseModel):
+    # True when the person is handing the screen to someone else.
+    switch: bool = False
+
+
+class TwoStepConfirmIn(BaseModel):
+    code: str = Field(min_length=6, max_length=12)
+
+
+class TwoStepOffIn(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+    code: str = Field(min_length=6, max_length=12)
 
 
 class PermissionOut(BaseModel):

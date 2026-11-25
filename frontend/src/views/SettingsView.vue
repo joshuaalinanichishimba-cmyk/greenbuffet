@@ -237,6 +237,22 @@ function when(iso: string) {
       </section>
 
       <section class="card set">
+        <h2>Shared screens and online status</h2>
+        <div class="limits">
+          <label class="field">
+            Lock a screen after (minutes without use)
+            <input v-model="values['lock.after_minutes']" type="text" inputmode="numeric" :disabled="!mayEdit" />
+            <small class="muted">0 never locks. The kitchen display never locks itself. Unlocking needs the same person's password.</small>
+          </label>
+          <label class="field">
+            Show someone as away after (minutes)
+            <input v-model="values['presence.away_minutes']" type="text" inputmode="numeric" :disabled="!mayEdit" />
+            <small class="muted">with their screen open but untouched. Away is not absence: attendance comes from clocking only.</small>
+          </label>
+        </div>
+      </section>
+
+      <section class="card set">
         <h2>Tax</h2>
         <label class="switch">
           <input

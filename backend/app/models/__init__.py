@@ -1,6 +1,6 @@
 """Importing this package registers every table with SQLAlchemy."""
 from app.models.access import (  # noqa: F401
-    AuditLog, LoginAttempt, Permission, Role, RolePermission, Setting, User,
+    AuditLog, LoginAttempt, Notification, Permission, Role, RolePermission, Setting, User, UserSession,
 )
 from app.models.base import Base  # noqa: F401
 from app.models.menu import (  # noqa: F401
@@ -22,7 +22,7 @@ from app.models.sales import (  # noqa: F401
 )
 
 __all__ = [
-    "Base", "User", "Role", "Permission", "RolePermission", "AuditLog", "LoginAttempt", "Setting",
+    "Base", "User", "UserSession", "Notification", "Role", "Permission", "RolePermission", "AuditLog", "LoginAttempt", "Setting",
     "Category", "Product", "OptionGroup", "OptionItem", "ProductOptionGroup",
     "Ingredient", "RecipeLine", "PriceChange",
     "Shift", "Order", "OrderLine", "OrderLineOption", "Payment", "IdempotencyKey",

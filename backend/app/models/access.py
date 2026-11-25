@@ -67,7 +67,77 @@ class User(Base, TimestampMixin):
     token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # --- the profile (stage 23) ---
+    # A phone for people with no staff-list record; for those with one, the
+    # staff record's phone is the one shown and kept.
+    phone: Mapped[str] = mapped_column(String(24), default="", nullable=False)
+    photo_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Which optional notices this person wants, as JSON. Security notices
+    # about their own account are always sent.
+    preferences: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    # Why the account was suspended, shown to managers, never to the public.
+    suspended_reason: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    # Archived accounts are switched off and hidden from the directory, but
+    # every record they made stays, attributed to them.
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Two-step sign-in with an authenticator app (RFC 6238 codes). The secret
+    # never leaves the server after setup; recovery codes are stored hashed.
+    totp_secret: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    recovery_codes: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+
     role: Mapped[Role] = relationship(back_populates="users", lazy="selectin")
+
+
+class UserSession(Base):
+    """One sign-in on one device, from sign-in until it ends.
+
+    The token carries this row's id, so a single device can be signed out
+    without touching the others. Presence comes from the heartbeat each open
+    screen sends: "seen" means the device is connected, "active" means
+    someone touched it. Nothing about what is typed or shown is kept.
+    """
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The screen was closed on purpose (the browser said so as it closed).
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Locked at the counter: the token is refused until the person unlocks.
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    # signed_out, switched, revoked, password, suspended, archived
+    end_reason: Mapped[str] = mapped_column(String(20), default="", nullable=False)
+    ended_by: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    device: Mapped[str] = mapped_column(String(20), default="", nullable=False)
+    browser: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    ip: Mapped[str] = mapped_column(String(60), default="", nullable=False)
+
+
+class Notification(Base):
+    """A notice for one person: an account or security event that needs eyes.
+
+    Routine comings and goings are never sent; they show on the directory.
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    level: Mapped[str] = mapped_column(String(10), default="info", nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    body: Mapped[str] = mapped_column(String(300), default="", nullable=False)
+    # Where to look: a profile, the directory, security settings.
+    link: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class LoginAttempt(Base):
@@ -80,6 +150,8 @@ class LoginAttempt(Base):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     succeeded: Mapped[bool] = mapped_column(Boolean, nullable=False)
     ip: Mapped[str] = mapped_column(String(60), default="")
+    # The browser and device, for the sign-in history. Never the password.
+    device: Mapped[str] = mapped_column(String(80), default="", nullable=False)
 
 
 class AuditLog(Base):

@@ -13,6 +13,11 @@ const router = createRouter({
       // The kitchen goes straight to its board, as in the demo.
       beforeEnter: () => (homeFor(session.user.value?.role_id, session.permissions.value) === 'kitchen' ? '/kitchen' : true),
     },
+    // Profiles and the team (stage 23). Everyone has their own profile;
+    // the directory and other people's profiles check permissions on the server.
+    { path: '/profile/:tab?', component: () => import('./views/ProfileView.vue') },
+    { path: '/team', component: () => import('./views/TeamView.vue') },
+    { path: '/team/:id/:tab?', component: () => import('./views/ProfileView.vue') },
     // The demo's Overview by name, for accounts whose home is something else.
     { path: '/overview', component: () => import('./views/DashboardView.vue') },
     {
@@ -152,6 +157,13 @@ router.beforeEach(async (to) => {
   if (!session.signedIn.value) return { path: '/login' }
   if (session.user.value?.must_change_password && to.path !== '/change-password') {
     return { path: '/change-password' }
+  }
+  // Owners must use two-step sign-in before anything else.
+  if (session.user.value?.two_step_required && !to.path.startsWith('/profile/security')) {
+    return { path: '/profile/security' }
+  }
+  if (to.path === '/team' && !session.canAny('team.view', 'staff.manage', 'hr.view', 'security.manage')) {
+    return { path: '/' }
   }
   // The server enforces this too; hiding the page simply avoids a dead end.
   const needed = to.meta.permission as string | undefined

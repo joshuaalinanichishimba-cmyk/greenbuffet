@@ -256,7 +256,17 @@ def employees(include_left: bool = False, db: Session = Depends(get_db), _: User
 
 @router.post("/employees", response_model=EmployeeOut, status_code=status.HTTP_201_CREATED)
 def create_employee(body: EmployeeIn, db: Session = Depends(get_db), user: User = Depends(can_manage_people)):
-    employee = Employee(number=numbered(db, "GB", width=3), created_by=user.name, **body.model_dump())
+    # The counter can be behind numbers already used (staff entered before it
+    # existed, or a restored backup); skip on to the first free number rather
+    # than fail with a duplicate.
+    number = numbered(db, "GB", width=3)
+    for _ in range(10_000):
+        if not db.scalar(select(Employee.id).where(Employee.number == number)):
+            break
+        number = numbered(db, "GB", width=3)
+    if body.user_id and db.scalar(select(Employee.id).where(Employee.user_id == body.user_id)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That account is already linked to someone on the staff list.")
+    employee = Employee(number=number, created_by=user.name, **body.model_dump())
     employee.name = employee.name.strip()
     db.add(employee)
     record(db, user.name, "people", "Employee added", employee.name, employee.number)

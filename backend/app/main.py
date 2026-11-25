@@ -68,6 +68,29 @@ async def unhandled(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
+# On the online demo anyone can sign in as anyone, so the few things that
+# would lock other visitors out, or leave the demo broken for the next one,
+# are switched off there. Everything else works, sales included.
+DEMO_BLOCKED = (
+    ("POST", "/api/v1/auth/change-password"), ("POST", "/api/v1/auth/two-step/"),
+    ("POST", "/api/v1/admin/users"), ("PATCH", "/api/v1/admin/users/"), ("PUT", "/api/v1/admin/roles/"),
+    ("POST", "/api/v1/team/"), ("DELETE", "/api/v1/"),
+    ("PUT", "/api/v1/settings"), ("POST", "/api/v1/settings/backups"), ("POST", "/api/v1/profile/me/photo"),
+)
+
+
+@app.middleware("http")
+async def demo_guard(request, call_next):
+    if settings.ENVIRONMENT == "demo":
+        path, method = request.url.path, request.method
+        if any(method == m and path.startswith(p) for m, p in DEMO_BLOCKED):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=403, content={
+                "detail": "Switched off in the online demo, so the next visitor finds it as you did. "
+                          "It works in the restaurant's own system."})
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def security_headers(request, call_next):
     """Headers that cost nothing and close off whole classes of attack."""

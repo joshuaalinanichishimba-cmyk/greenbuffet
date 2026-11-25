@@ -44,6 +44,8 @@ def main() -> int:
             db.commit()
             print("Test sign-in is off. Everyone types their password again.")
             print("Before real use, give each person their own password under Staff & roles.")
+            print("Owners: two-step sign-in is now required. At your next sign-in you will be asked")
+            print("to set it up with an authenticator app on your phone. Have it ready.")
             return 0
         if settings.ENVIRONMENT == "production":
             print("Refused: this computer is set to production. Test sign-in is only for trying the system out.")

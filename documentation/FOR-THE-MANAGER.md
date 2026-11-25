@@ -197,3 +197,53 @@ You can't review your own till or confirm your own cash move.
 Both owners have full access. Neither can switch off or demote the other;
 that protects each of you. A password reset or switching an account off signs
 that person out everywhere at once.
+
+## The team (stage 23)
+
+**Setup → Team** shows everyone with an account. Each person shows:
+- **Online / Away / Connection lost / Offline**: from their screen's
+  heartbeat;
+- **On duty / Off duty / On leave**: from clocking only.
+
+The two are separate on purpose. Offline does not mean absent; a dropped
+network or load shedding shows as *Connection lost*. Tap a person for their
+profile: activity, attendance and tills, permissions, and (owners only)
+sign-in history and devices.
+
+From a profile, owners can:
+- change the role;
+- suspend or restore access (with a reason);
+- reset the password;
+- sign out one device or all of them;
+- reset two-step sign-in for a lost phone;
+- archive someone who has left (their records stay).
+
+Neither owner can suspend, demote or archive the other.
+
+**Team status** on the owner's Overview counts who is online, away, offline,
+on duty, on leave and suspended.
+
+## Locking the counter computer
+
+Menu (your picture, top right) → **Lock screen**, or it locks by itself after
+10 minutes untouched (Settings → Shared screens). Only your password unlocks
+it. Someone else taps **Switch person** and signs in as themselves; anything
+in your till basket waits for you. The kitchen display never locks itself.
+
+## Two-step sign-in for the owners
+
+Owner accounts must use a code from an authenticator app on the phone
+(Google Authenticator, Microsoft Authenticator or Authy). After test mode is
+switched off, each owner is asked to set it up at their next sign-in:
+1. Scan the QR code with the app.
+2. Type the code the app shows.
+3. **Write down the eight recovery codes.** They are shown only once.
+
+If an owner loses their phone, they sign in with a recovery code. If those are
+lost too, run `.\scripts\reset-owner.ps1` on the server computer.
+
+## Notices
+
+The bell, top right, shows account and security notices: new accounts,
+suspensions, role changes, repeated wrong passwords, new devices. Choose which
+ones you get under **Notification preferences**.

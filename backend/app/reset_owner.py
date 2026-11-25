@@ -9,7 +9,9 @@ backend\\.env, which is the proof that whoever runs it is allowed to.
 
 It prints a new temporary password, switches the account back on, clears
 the failed attempts that lock it for 15 minutes, and makes the person choose
-their own password at the next sign-in. Recorded in the activity log.
+their own password at the next sign-in. It also turns off two-step sign-in,
+for a lost or replaced phone: an owner sets it up again straight after
+signing in. Recorded in the activity log.
 """
 import sys
 
@@ -32,9 +34,16 @@ def reset(email: str) -> str | None:
         user.token_version = (user.token_version or 0) + 1  # ends any session still open
         user.must_change_password = True
         user.is_active = True
+        user.archived_at = None
+        user.suspended_reason = ""
+        had_two_step = user.totp_enabled
+        user.totp_enabled, user.totp_secret, user.recovery_codes = False, "", "[]"
+        from app.services.accounts import end_sessions
+        end_sessions(db, user, "password", "server computer")
         db.execute(delete(LoginAttempt).where(LoginAttempt.email == email, LoginAttempt.succeeded.is_(False)))
         record(db, "server computer", "users", "Password reset",
-               f"Temporary password set for {email} with reset-owner on the server computer.", user.id)
+               f"Temporary password set for {email} with reset-owner on the server computer"
+               + ("; two-step sign-in turned off." if had_two_step else "."), user.id)
         db.commit()
         return password
 
