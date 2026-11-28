@@ -15,7 +15,10 @@ import uuid
 
 import requests
 
-BASE = os.environ.get("GB_BASE", "http://localhost:8000/api/v1")
+from safety import validate_test_target
+
+validate_test_target()
+BASE = os.environ.get("GB_BASE", "http://127.0.0.1:18000/api/v1")
 EMAIL = os.environ.get("GB_EMAIL", "owner@greenbuffet.zm")
 PASSWORD = os.environ.get("GB_PASSWORD", "greenbuffet2026")
 

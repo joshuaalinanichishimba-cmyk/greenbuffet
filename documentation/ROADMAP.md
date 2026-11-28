@@ -1,5 +1,7 @@
 # Roadmap
 
+> **Historical plan; reconciliation in progress.** The table below records prior stage planning and reports, not verified completion of all requirements. Current code is at Stage 27 (`e0b65c1`). Stage 26's row describes an intended Lenco integration, but the current branch does not contain a verified Lenco API/webhook implementation. Stage 28/29 are not a complete production plan. Use `REQUIREMENTS-TRACEABILITY.md` after the authoritative 114-section specification is received.
+
 Twelve stages, plus four added afterwards. All are finished. Each has a
 report in this folder saying what it does, what it refuses to do, and what was
 left out on purpose.

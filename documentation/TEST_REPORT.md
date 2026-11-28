@@ -1,5 +1,52 @@
 # Test report
 
+## Current isolated regression checkpoint (28 November 2026)
+
+| Check | Result |
+|---|---|
+| Backend integration suite | **115 passed, 1 warning** on an isolated local PostgreSQL test database and loopback test API |
+| Frontend production build | Passed |
+| Python compilation | Passed |
+| Browser smoke | Sign-in screen loaded without JavaScript errors; authenticated workflow not verified |
+| Docker Compose | Not run: Docker is unavailable on this workstation |
+
+The suite did not use business records. The PostgreSQL cluster and API were local, the database name was `greenbuffet_test_…`, the database role was a separate `gb_app_…` role, email was captured to files, and payment-provider credentials were not set. The test guard is `backend/tests/safety.py`; pytest discovery is restricted by `backend/pytest.ini` to `tests/test_*.py`, so the standalone `load_test.py` is not imported as a test.
+
+For the currently retained disposable sandbox (when its `%TEMP%\greenbuffet-isolated-1fb6813a` directory still exists), start PostgreSQL in one PowerShell window:
+
+```powershell
+& "$env:ProgramFiles\PostgreSQL\18\bin\pg_ctl.exe" -D "$env:TEMP\greenbuffet-isolated-1fb6813a\pgdata" -l "$env:TEMP\greenbuffet-isolated-1fb6813a\postgres.log" start
+```
+
+From `backend/`, start the API in a second window after loading its private settings from the temp file (the loop prints no values):
+
+```powershell
+Get-Content "$env:TEMP\greenbuffet-isolated-1fb6813a\.env.test" | ForEach-Object {
+  if ($_ -match '^([^#=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') }
+}
+$env:GB_TEST_MODE = '1'
+$env:GB_BASE = 'http://127.0.0.1:18000/api/v1'
+$env:LOGIN_RATE_PER_MINUTE = '200'
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 18000
+```
+
+With the API running, open a third PowerShell window in `backend/`, load the same private test settings without printing their values, then run:
+
+```powershell
+Get-Content "$env:TEMP\greenbuffet-isolated-1fb6813a\.env.test" | ForEach-Object {
+  if ($_ -match '^([^#=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') }
+}
+$env:GB_TEST_MODE = '1'
+$env:ENVIRONMENT = 'test'
+$env:GB_BASE = 'http://127.0.0.1:18000/api/v1'
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = '1'
+..\.venv\Scripts\python.exe -m pytest -q
+```
+
+The run's single pytest warning was the cache provider's inability to write `.pytest_cache` in this environment; it did not fail tests. A later Uvicorn log also contains a Starlette deprecation warning for `HTTP_422_UNPROCESSABLE_ENTITY`; that is a separate server warning and was not established as the one pytest summary warning. Re-run with `-p no:cacheprovider` to check whether the pytest warning is eliminated; that variation has not yet been run. Never point the API or test variables at a production or ordinary development database.
+
+These 115 integration tests are the current regression baseline. The baseline does not prove browser workflows, actual installed-PWA behavior, concurrent stress, migration safety, restore readiness, hardware behavior, or production configuration.
+
 ## Stage 27, 25 November 2026 (installable app and offline cash sales)
 
 | Suite | Result |
