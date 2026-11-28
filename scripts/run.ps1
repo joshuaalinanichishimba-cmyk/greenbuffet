@@ -79,7 +79,7 @@ if (-not $NoBrowser) {
     foreach ($i in 1..90) {
         Start-Sleep -Seconds 1
         try {
-            $r = Invoke-RestMethod 'http://localhost:8000/api/v1/health' -TimeoutSec 2
+            $r = Invoke-RestMethod 'http://127.0.0.1:8000/api/v1/health' -TimeoutSec 4
             if ($r.status -eq 'ok') { $ready = $true; break }
         } catch { }
     }

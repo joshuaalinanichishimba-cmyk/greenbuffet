@@ -75,7 +75,7 @@ $addresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue 
 
 Write-Host ''
 try {
-    $health = Invoke-RestMethod "http://localhost:$Port/api/v1/health" -TimeoutSec 10
+    $health = Invoke-RestMethod "http://127.0.0.1:$Port/api/v1/health" -TimeoutSec 10
     Write-Host "  Running. Database: $($health.database)." -ForegroundColor Green
 } catch {
     Write-Host '  Started, but it is not answering yet. Give it a minute, then check:' -ForegroundColor Yellow
