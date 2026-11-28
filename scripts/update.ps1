@@ -126,7 +126,7 @@ if ($installed) {
     foreach ($i in 1..60) {
         Start-Sleep -Seconds 1
         try {
-            if ((Invoke-RestMethod 'http://127.0.0.1:8000/api/v1/health' -TimeoutSec 4).status -eq 'ok') { $ready = $true; break }
+            if ((Invoke-RestMethod 'http://localhost:8000/api/v1/health' -TimeoutSec 2).status -eq 'ok') { $ready = $true; break }
         } catch { }
     }
     Write-Host ''

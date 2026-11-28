@@ -119,7 +119,7 @@ if (Get-ScheduledTask -TaskName 'Green Buffet' -ErrorAction SilentlyContinue) {
     $ok = $false
     foreach ($i in 1..40) {
         Start-Sleep -Seconds 1
-        try { if ((Invoke-RestMethod "http://127.0.0.1:$Port/api/v1/health" -TimeoutSec 4).status -eq 'ok') { $ok = $true; break } } catch { }
+        try { if ((Invoke-RestMethod "http://localhost:$Port/api/v1/health" -TimeoutSec 2).status -eq 'ok') { $ok = $true; break } } catch { }
     }
     if ($ok) { Line "Running, database connected. Open http://localhost:$Port and sign in." Green }
     else { Line 'Not answering yet. Run .\scripts\status.ps1 in a minute.' Yellow }
